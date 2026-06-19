@@ -148,10 +148,12 @@ async function inicializarCache() {
     cache.riesgos = riesgosDoc.exists ? {
       porcentajeLimitaCalientes: 0.20,
       factorCupoColectivo: 3.0,
+      limitesEspecificos: {},
       ...riesgosDoc.data()
     } : {
       animalesBloqueados: [],
       porcentajesLimite: {},
+      limitesEspecificos: {},
       autoLimitarCalientes: true,
       porcentajeLimitaCalientes: 0.20,
       factorCupoColectivo: 3.0
@@ -641,7 +643,16 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
       }
     }
 
-    const limiteIndividual = limiteLoteria * factorReduccion;
+    let limiteIndividual = limiteLoteria * factorReduccion;
+
+    // Si hay un límite específico en Bolívares configurado para este animalito, tiene precedencia
+    const limitesEspecificos = cache.riesgos.limitesEspecificos || {};
+    if (limitesEspecificos[animalNum] !== undefined && limitesEspecificos[animalNum] !== null) {
+      const limiteEspecial = parseFloat(limitesEspecificos[animalNum]);
+      if (!isNaN(limiteEspecial) && limiteEspecial >= 0) {
+        limiteIndividual = limiteEspecial;
+      }
+    }
 
     // 1. Validación de Límite Individual Acumulativo
     const matchingJugadasCliente = cache.jugadas.filter(existingPlay =>
@@ -1560,6 +1571,7 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
     const data = {
       animalesBloqueados: cache.riesgos.animalesBloqueados || [],
       porcentajesLimite: cache.riesgos.porcentajesLimite || {},
+      limitesEspecificos: cache.riesgos.limitesEspecificos || {},
       autoLimitarCalientes: cache.riesgos.autoLimitarCalientes !== undefined ? cache.riesgos.autoLimitarCalientes : true,
       porcentajeLimitaCalientes: cache.riesgos.porcentajeLimitaCalientes !== undefined ? cache.riesgos.porcentajeLimitaCalientes : 0.20,
       factorCupoColectivo: cache.riesgos.factorCupoColectivo !== undefined ? cache.riesgos.factorCupoColectivo : 3.0
@@ -1578,11 +1590,12 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
 
 // Guardar configuración de riesgos
 app.post('/api/configuracion/riesgos', async (req, res) => {
-  const { animalesBloqueados, porcentajesLimite, autoLimitarCalientes, porcentajeLimitaCalientes, factorCupoColectivo } = req.body;
+  const { animalesBloqueados, porcentajesLimite, limitesEspecificos, autoLimitarCalientes, porcentajeLimitaCalientes, factorCupoColectivo } = req.body;
   try {
     const updateData = {
       animalesBloqueados: Array.isArray(animalesBloqueados) ? animalesBloqueados : [],
       porcentajesLimite: porcentajesLimite || {},
+      limitesEspecificos: limitesEspecificos || {},
       autoLimitarCalientes: autoLimitarCalientes !== undefined ? !!autoLimitarCalientes : true,
       porcentajeLimitaCalientes: porcentajeLimitaCalientes !== undefined ? parseFloat(porcentajeLimitaCalientes) : 0.20,
       factorCupoColectivo: factorCupoColectivo !== undefined ? parseFloat(factorCupoColectivo) : 3.0
