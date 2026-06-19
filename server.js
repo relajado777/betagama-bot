@@ -1748,6 +1748,50 @@ app.post('/api/jugadas/:id/procesar-fiada', async (req, res) => {
   }
 });
 
+function esDemasiadoTardeParaAnular(sorteoFecha, sorteoHora) {
+  try {
+    const parseTimeToMinutes = (h) => {
+      const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+      if (!matches) return 0;
+      let hr = parseInt(matches[1], 10);
+      const min = parseInt(matches[2], 10);
+      const meridiano = matches[3].toLowerCase();
+      if (meridiano === 'pm' && hr < 12) hr += 12;
+      if (meridiano === 'am' && hr === 12) hr = 0;
+      return hr * 60 + min;
+    };
+
+    // 1. Obtener fecha y hora actual en Caracas
+    const ahoraCaracas = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Caracas' }));
+    
+    // 2. Obtener la fecha del sorteo en Caracas (año, mes, día)
+    const [year, month, day] = sorteoFecha.split('-').map(Number);
+    
+    // 3. Crear fecha del sorteo a las 00:00 en Caracas
+    const fechaSorteo = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Caracas' }));
+    fechaSorteo.setFullYear(year, month - 1, day);
+    fechaSorteo.setHours(0, 0, 0, 0);
+
+    // 4. Calcular minutos de la hora del sorteo
+    const minutosSorteo = parseTimeToMinutes(sorteoHora);
+    
+    // 5. Crear la hora exacta del sorteo en Caracas
+    const tiempoExactoSorteo = new Date(fechaSorteo.getTime() + minutosSorteo * 60 * 1000);
+    
+    // 6. Diferencia en milisegundos
+    const difMs = tiempoExactoSorteo.getTime() - ahoraCaracas.getTime();
+    
+    // 7. Si la diferencia es menor a 5 minutos, no se puede anular
+    if (difMs < 5 * 60 * 1000) {
+      return true; // Demasiado tarde o ya pasó
+    }
+    return false; // Se puede anular
+  } catch (err) {
+    console.error('Error al validar tiempo para anular:', err);
+    return false; // En caso de error, permitir por defecto
+  }
+}
+
 // Aprobación: ANULAR
 app.post('/api/jugadas/:id/anular', async (req, res) => {
   const { id } = req.params;
@@ -1759,6 +1803,11 @@ app.post('/api/jugadas/:id/anular', async (req, res) => {
     }
     if (jugada.estado !== 'pendiente') {
       return res.status(400).json({ error: 'La jugada ya no está en estado pendiente' });
+    }
+
+    // Validar tiempo (debe anularse al menos 5 minutos antes del sorteo)
+    if (esDemasiadoTardeParaAnular(jugada.sorteoFecha, jugada.sorteoHora)) {
+      return res.status(400).json({ error: `No se puede anular: quedan menos de 5 minutos para el sorteo de las ${jugada.sorteoHora} o el mismo ya se realizó.` });
     }
 
     jugada.estado = 'anulada';
@@ -1875,7 +1924,14 @@ app.post('/api/tickets/:ticketNumero/anular', async (req, res) => {
   try {
     const matchingJugadas = cache.jugadas.filter(j => j.ticketNumero === ticketNumero && j.estado === 'pendiente');
     if (matchingJugadas.length === 0) {
-      return res.status(404).json({ error: 'Ticket no encontrado' });
+      return res.status(404).json({ error: 'Ticket no encontrado o ya no está en estado pendiente' });
+    }
+
+    // Validar tiempo para todas las jugadas del ticket (al menos 5 minutos antes del sorteo)
+    for (const j of matchingJugadas) {
+      if (esDemasiadoTardeParaAnular(j.sorteoFecha, j.sorteoHora)) {
+        return res.status(400).json({ error: `No se puede anular el ticket: la jugada ${j.valor} para el sorteo de las ${j.sorteoHora} está a menos de 5 minutos de iniciar o ya se realizó.` });
+      }
     }
 
     const batch = isMock ? null : db.batch();
