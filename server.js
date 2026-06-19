@@ -2090,6 +2090,22 @@ app.get('/api/retiros', (req, res) => {
   res.json(cache.retiros);
 });
 
+// Eliminar un retiro
+app.delete('/api/retiros/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const exists = cache.retiros.some(r => r.id === id);
+    if (!exists) {
+      return res.status(404).json({ error: 'Retiro no encontrado.' });
+    }
+    await dbDelete('retiros', id);
+    res.json({ success: true, message: 'Retiro eliminado correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar retiro:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Completar un retiro
 app.post('/api/retiros/:id/completar', async (req, res) => {
   const { id } = req.params;
