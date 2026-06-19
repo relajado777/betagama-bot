@@ -1685,7 +1685,7 @@ app.get('/api/jugadas', (req, res) => {
   res.json(cache.jugadas);
 });
 
-// Modificar datos de cliente (Nombre, Teléfono, Deuda) con re-keying
+// Modificar datos de cliente (Nombre, Teléfono, Deuda)
 app.put('/api/clientes/:oldTelefono', async (req, res) => {
   const { oldTelefono } = req.params;
   const { nombre, telefono: newTelefono, deuda } = req.body;
@@ -1698,70 +1698,26 @@ app.put('/api/clientes/:oldTelefono', async (req, res) => {
     
     const parsedDeuda = parseFloat(deuda) || 0;
     
-    if (newTelefono && newTelefono !== oldTelefono) {
-      const exists = cache.clientes.some(c => c.id === newTelefono || c.telefono === newTelefono);
+    // Si se modifica el teléfono, validar que no esté en uso por otro cliente
+    if (newTelefono && newTelefono !== oldData.telefono) {
+      const exists = cache.clientes.some(c => c.id !== oldData.id && (c.telefono === newTelefono || c.id === newTelefono));
       if (exists) {
         return res.status(400).json({ error: 'Ya existe un cliente con ese número de teléfono.' });
       }
-      
-      const updatedData = {
-        ...oldData,
-        nombre: nombre || oldData.nombre,
-        telefono: newTelefono,
-        deuda: parsedDeuda,
-        clienteJid: `${newTelefono}@c.us`
-      };
-      
-      await dbSet('clientes', newTelefono, updatedData);
-      await dbDelete('clientes', oldTelefono);
-      
-      const batch = isMock ? null : db.batch();
-      let jugadasCount = 0;
-      
-      cache.jugadas.forEach(j => {
-        if (j.clienteTelefono === oldTelefono) {
-          j.clienteTelefono = newTelefono;
-          j.clienteJid = `${newTelefono}@c.us`;
-          if (!isMock && batch) {
-            batch.update(db.collection('jugadas').doc(j.id), {
-              clienteTelefono: newTelefono,
-              clienteJid: `${newTelefono}@c.us`
-            });
-          }
-          jugadasCount++;
-        }
-      });
-      if (!isMock && batch && jugadasCount > 0) {
-        await batch.commit();
-      }
-      
-      const premiosQuery = await db.collection('premios').where('clienteTelefono', '==', oldTelefono).get();
-      const batchPremios = isMock ? null : db.batch();
-      let premiosCount = 0;
-      
-      for (const doc of premiosQuery.docs) {
-        if (!isMock && batchPremios) {
-          batchPremios.update(db.collection('premios').doc(doc.id), {
-            clienteTelefono: newTelefono,
-            clienteJid: `${newTelefono}@c.us`
-          });
-        }
-        premiosCount++;
-      }
-      if (!isMock && batchPremios && premiosCount > 0) {
-        await batchPremios.commit();
-      }
-      
-      console.log(`🔄 Re-keying de cliente completado de ${oldTelefono} a ${newTelefono}. Actualizadas ${jugadasCount} jugadas y ${premiosCount} premios.`);
-    } else {
-      oldData.nombre = nombre || oldData.nombre;
-      oldData.deuda = parsedDeuda;
-      await dbUpdate('clientes', oldTelefono, {
-        nombre: oldData.nombre,
-        deuda: parsedDeuda
-      });
+      oldData.telefono = newTelefono;
     }
+
+    oldData.nombre = nombre || oldData.nombre;
+    oldData.deuda = parsedDeuda;
+
+    // Actualizar en base de datos física y local
+    await dbUpdate('clientes', oldData.id, {
+      nombre: oldData.nombre,
+      deuda: parsedDeuda,
+      telefono: oldData.telefono
+    });
     
+    console.log(`👤 Cliente actualizado: ${oldData.nombre} (ID: ${oldData.id}, Teléfono: ${oldData.telefono}, Deuda: ${oldData.deuda})`);
     res.json({ success: true, message: 'Cliente actualizado correctamente.' });
   } catch (error) {
     console.error('Error al actualizar cliente:', error);
@@ -2259,7 +2215,13 @@ async function registrarResultadoSorteoInternal(loteria, hora, resultado, fecha)
           
           try {
             const actualJid = clienteData ? clienteData.clienteJid : (j.clienteJid || `${j.clienteTelefono}@c.us`);
-            await client.sendMessage(actualJid, `🏆 *¡FELICIDADES, ${j.clienteNombre}!* 🏆\n\nTu jugada en *${loteria.toUpperCase()}* de *${j.valor}* para el sorteo de las ${hora} ha resultado *GANADORA*.\n\n💰 *Premio:* Bs. *${premioMonto.toLocaleString('de-DE')}*\n_El premio ha sido abonado automáticamente a tu saldo de deudas._`);
+            const msg = `🏆 *¡FELICIDADES, ${j.clienteNombre}!* 🏆\n\nTu jugada en *${loteria.toUpperCase()}* de *${j.valor}* para el sorteo de las ${hora} ha resultado *GANADORA*.\n\n💰 *Premio:* Bs. *${premioMonto.toLocaleString('de-DE')}*\n_El premio ha sido abonado automáticamente a tu saldo de deudas._`;
+            await client.sendMessage(actualJid, msg);
+            
+            // Notificar por Telegram también si está vinculado
+            if (clienteData && clienteData.telegramChatId && telegramBot && typeof telegramBot.sendMessage === 'function') {
+              telegramBot.sendMessage(clienteData.telegramChatId, msg);
+            }
           } catch (err) {
             console.error(`No se pudo enviar notificación de premio a ${j.clienteTelefono}:`, err);
           }
