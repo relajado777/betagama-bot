@@ -599,18 +599,13 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
       session.jugadasPendientes = [];
       const animalCapitalized = j.animal.toUpperCase();
       
-      if (factorReduccion < 1.0) {
-        let motivo = `por políticas de control de riesgos de la agencia (Límite Reducido 🛡️)`;
-        if (esCaliente) {
-          motivo = `debido a su alta frecuencia de salida reciente (Animal Caliente 🔥)`;
-        } else if (esAtrasado) {
-          motivo = `debido a que lleva muchos sorteos sin salir (Animal Atrasado ❄️)`;
-        }
-        
-        await message.reply(`⚠️ *Cupo Límite Superado*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** para el monto solicitado de Bs. ${j.monto.toLocaleString('de-DE')}.\n\n👉 El *${animalCapitalized} (#${animalNum})* está disponible por el monto máximo de hasta *Bs. ${limiteIndividual.toLocaleString('de-DE')}* (${Math.round(factorReduccion * 100)}% del límite habitual) ${motivo}.`);
-      } else {
-        await message.reply(`⚠️ *Cupo Límite Superado*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** para el monto solicitado de Bs. ${j.monto.toLocaleString('de-DE')}.\n\n👉 El *${animalCapitalized} (#${animalNum})* está disponible por el monto máximo habitual de hasta *Bs. ${limiteIndividual.toLocaleString('de-DE')}* para esta lotería.`);
-      }
+      // Guardar el contexto del rechazo para permitir "ponlo por X"
+      session.ultimaJugadaRechazada = {
+        jugada: j,
+        limiteDisponible: limiteIndividual
+      };
+
+      await message.reply(`⚠️ *Cupo Límite Superado*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** para el monto solicitado de Bs. ${j.monto.toLocaleString('de-DE')}.\n\n👉 El *${animalCapitalized} (#${animalNum})* está disponible por el monto máximo de hasta *Bs. ${limiteIndividual.toLocaleString('de-DE')}*.`);
       return false;
     }
 
@@ -635,6 +630,11 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
       if (cupoColectivoDisponible === 0) {
         await message.reply(`⚠️ *Jugada Agotada*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** (cupo general de la agencia lleno) para este sorteo.`);
       } else {
+        // Guardar el contexto del rechazo para permitir "ponlo por X"
+        session.ultimaJugadaRechazada = {
+          jugada: j,
+          limiteDisponible: cupoColectivoDisponible
+        };
         await message.reply(`⚠️ *Cupo Límite Superado*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** para el monto solicitado de Bs. ${j.monto.toLocaleString('de-DE')}.\n\n👉 El *${animalCapitalized} (#${animalNum})* está disponible solo por el monto máximo restante de *Bs. ${cupoColectivoDisponible.toLocaleString('de-DE')}* para este sorteo.`);
       }
       return false;
@@ -1037,6 +1037,70 @@ client.on('message', async (message) => {
       }
     }
 
+    // FLUJO CONTEXTUAL: Ajustar jugada rechazada ("ponlo por X", "ponlo en X", "entonces ponlo por X")
+    const cleanedText = cleanText(texto);
+    const matchPonloPor = cleanedText.match(/^(?:entonces\s+)?ponlo\s+(?:por|en)\s+(\d+|el\s+maximo|el\s+max)$/i);
+    if (matchPonloPor) {
+      if (!session.ultimaJugadaRechazada) {
+        await message.reply(`⚠️ No tengo registro de ninguna jugada rechazada reciente para ajustar en esta conversación.`);
+        return;
+      }
+
+      let montoAjustado = 0;
+      const param = matchPonloPor[1];
+      const limiteDisponible = session.ultimaJugadaRechazada.limiteDisponible;
+
+      if (param === 'el maximo' || param === 'el max') {
+        montoAjustado = limiteDisponible;
+      } else {
+        montoAjustado = parseFloat(param);
+      }
+
+      if (isNaN(montoAjustado) || montoAjustado <= 0) {
+        await message.reply(`⚠️ El monto ingresado no es válido.`);
+        return;
+      }
+
+      if (montoAjustado > limiteDisponible) {
+        await message.reply(`⚠️ El monto solicitado de Bs. ${montoAjustado.toLocaleString('de-DE')} excede el límite permitido de Bs. ${limiteDisponible.toLocaleString('de-DE')}. Por favor responde con un monto menor o igual.`);
+        return;
+      }
+
+      // Re-construir la jugada con el monto ajustado
+      const jugadaOriginal = session.ultimaJugadaRechazada.jugada;
+      const jugadaAjustada = {
+        ...jugadaOriginal,
+        monto: montoAjustado
+      };
+
+      // Limpiar el contexto para evitar ejecuciones repetidas
+      delete session.ultimaJugadaRechazada;
+
+      // Colocar en jugadas pendientes y cambiar a esperando confirmación
+      session.jugadasPendientes = [jugadaAjustada];
+      session.estado = 'esperando_confirmacion';
+
+      let msgConfirmacion = `📋 *Confirma tu jugada ajustada, ${nombreCliente}:*\n\n`;
+      msgConfirmacion += `1. *${(jugadaAjustada.loteria || 'Lotto Activo').toUpperCase()}* (${jugadaAjustada.sorteoHora}) ➔ ${jugadaAjustada.animal.toUpperCase()} (#${jugadaAjustada.numero}) — Bs. ${montoAjustado.toLocaleString('de-DE')}\n\n`;
+      msgConfirmacion += `💰 Total a pagar: *Bs. ${montoAjustado.toLocaleString('de-DE')}*\n\n`;
+      msgConfirmacion += `Responde *SI* para registrar tu jugada o *NO* para cancelarla.`;
+
+      await message.reply(msgConfirmacion);
+      return;
+    }
+
+    // FLUJO: Consulta de Loterías Disponibles
+    const palabrasClaveLoterias = ['cuales loterias', 'loterias disponibles', 'loterias activas', 'que loterias hay', 'loterias hay', 'lista de loterias', 'loterias'];
+    if (palabrasClaveLoterias.some(pc => cleanedText === pc || cleanedText === 'loterias')) {
+      const activeLoteriasNames = cache.loterias
+        .filter(l => l.activa !== false)
+        .map(l => `🔸 *${l.nombre}* (Premio: ${l.multiplicador}x, Límite: Bs. ${l.limite.toLocaleString('de-DE')})`)
+        .join('\n');
+      
+      await message.reply(`🎰 *Loterías Disponibles hoy:*\n\n${activeLoteriasNames || 'No hay loterías activas por el momento.'}\n\n_Para realizar una jugada, escribe el nombre del animalito, monto y la lotería. Ejemplo: "mono 2000 granjita"_`);
+      return;
+    }
+
     // FLUJO: Consulta de Deuda ("cuanto debo", "deuda", "saldo")
     const palabrasClaveDeuda = ['cuanto debo', 'mi deuda', 'deuda', 'saldo', 'pagar'];
     if (palabrasClaveDeuda.some(pc => cleanText(texto).includes(pc))) {
@@ -1105,7 +1169,12 @@ client.on('message', async (message) => {
       await procesarLimitesYSorteosDeJugadas(interpretacion.jugadas, loteriasList, message, session, clienteData, nombreCliente);
     } else {
       // El mensaje no se entendió como una jugada válida y el cliente ya está registrado
-      const saludoHumano = `¡Hola *${nombreCliente}*! 😊 ¿Cómo estás?\n\nNo logré entender tu mensaje como una jugada o comando.\n\n✍️ *Si deseas jugar*, indícame el animalito, el monto y la lotería. Por ejemplo:\n👉 "perro 5000 lotto activo"\n👉 "mono 3000 la granjita y delfin 5000 guacharo"\n\n💰 *Si deseas retirar tu saldo*, escribe *retirar* o *pago movil*.\n\n📊 *Si deseas consultar tu deuda*, escribe *deuda* o *saldo*.\n\n¿En qué te puedo ayudar hoy?`;
+      const activeLoteriasNames = cache.loterias
+        .filter(l => l.activa !== false)
+        .map(l => `*${l.nombre}*`)
+        .join(', ');
+
+      const saludoHumano = `¡Hola *${nombreCliente}*! 😊 ¿Cómo estás?\n\nNo logré entender tu mensaje como una jugada o comando.\n\n🎰 *Loterías disponibles hoy:* ${activeLoteriasNames || 'Ninguna por el momento'}\n\n✍️ *Si deseas jugar*, indícame el animalito, el monto y la lotería. Por ejemplo:\n👉 "perro 5000 lotto activo"\n👉 "mono 3000 la granjita y delfin 5000 guacharo"\n\n💰 *Si deseas retirar tu saldo*, escribe *retirar* o *pago movil*.\n\n📊 *Si deseas consultar tu deuda*, escribe *deuda* o *saldo*.\n\n¿En qué te puedo ayudar hoy?`;
       await message.reply(saludoHumano);
     }
 
