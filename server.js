@@ -6,6 +6,7 @@ import qrcodeTerminal from 'qrcode-terminal';
 import { db, isMock } from './config/firebase.js';
 import { interpretarMensaje, ANIMALITOS_MAP, GUACHARO_ANIMALITOS_MAP } from './services/interpreter.js';
 import fs from 'fs';
+import path from 'path';
 
 const { Client, LocalAuth } = pkg;
 
@@ -435,9 +436,11 @@ const client = new Client({
 
 let botState = 'disconnected';
 let botPaused = false; // Si es true, el bot ignora todos los mensajes entrantes
+let latestQr = null; // Guardar el último código QR generado para mostrarlo en el panel
 
 client.on('qr', (qr) => {
   botState = 'qr';
+  latestQr = qr;
   console.log('⚠️ SE REQUIERE ESCANEAR EL CÓDIGO QR PARA INICIAR EL BOT:');
   qrcodeTerminal.generate(qr, { small: true });
   console.log('📷 Por favor, escanea el código QR de arriba con la aplicación de WhatsApp en tu teléfono.');
@@ -445,16 +448,19 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => {
   botState = 'connected';
+  latestQr = null;
   console.log('🚀 ¡El Bot de WhatsApp está conectado y listo para procesar mensajes!');
 });
 
 client.on('auth_failure', (msg) => {
   botState = 'auth_failure';
+  latestQr = null;
   console.error('❌ Fallo de autenticación en WhatsApp:', msg);
 });
 
 client.on('disconnected', (reason) => {
   botState = 'disconnected';
+  latestQr = null;
   console.log('❌ El Bot de WhatsApp se ha desconectado:', reason);
 });
 
@@ -1245,7 +1251,7 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
 
 // Obtener estado del Bot de WhatsApp y API
 app.get('/api/status', (req, res) => {
-  res.json({ whatsapp: botState, paused: botPaused });
+  res.json({ whatsapp: botState, paused: botPaused, qr: latestQr });
 });
 
 // Activar / Pausar el bot sin desconectar WhatsApp
@@ -1259,6 +1265,44 @@ app.post('/api/bot/toggle', (req, res) => {
   const estado = botPaused ? '⏸️ PAUSADO' : '▶️ ACTIVO';
   console.log(`🤖 Bot ${estado} manualmente desde el panel.`);
   res.json({ success: true, paused: botPaused, message: `Bot ${estado}` });
+});
+
+// Resetear sesión del bot (borrar credenciales y pedir QR nuevo)
+app.post('/api/bot/reset', async (req, res) => {
+  try {
+    console.log('🔄 Petición de reinicio de sesión de WhatsApp recibida...');
+    
+    // Detener el cliente si está activo
+    try {
+      await client.destroy();
+    } catch (destroyErr) {
+      console.warn('Advertencia al destruir cliente:', destroyErr.message);
+    }
+    
+    // Borrar la carpeta de autenticación
+    const authPath = path.resolve('./.wwebjs_auth');
+    if (fs.existsSync(authPath)) {
+      fs.rmSync(authPath, { recursive: true, force: true });
+      console.log('🗑️ Carpeta .wwebjs_auth eliminada con éxito.');
+    }
+    
+    // Volver a crear el directorio
+    fs.mkdirSync(authPath, { recursive: true });
+    
+    // Reiniciar el estado
+    botState = 'disconnected';
+    latestQr = null;
+    
+    // Inicializar el cliente de nuevo en segundo plano
+    client.initialize().catch(err => {
+      console.error('Error al re-inicializar el cliente:', err.message);
+    });
+    
+    res.json({ success: true, message: 'Sesión de WhatsApp reseteada. Generando nuevo código QR...' });
+  } catch (error) {
+    console.error('Error al resetear la sesión del bot:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Obtener configuración general (Límites)
