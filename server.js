@@ -7,6 +7,9 @@ import { db, isMock } from './config/firebase.js';
 import { interpretarMensaje, ANIMALITOS_MAP, GUACHARO_ANIMALITOS_MAP } from './services/interpreter.js';
 import fs from 'fs';
 import path from 'path';
+import { initTelegramBot } from './services/telegram.js';
+
+let telegramBot = null;
 
 const { Client, LocalAuth } = pkg;
 
@@ -839,6 +842,60 @@ client.on('message', async (message) => {
       }
     }
 
+    // Sincronizar humanMode de clienteData a la sesión en memoria si está definido
+    if (clienteData && clienteData.humanMode !== undefined) {
+      session.humanMode = !!clienteData.humanMode;
+    }
+
+    const normText = cleanText(texto).replace(/[.,;:!?]/g, '').trim();
+
+    // Notificar al admin por Telegram ante posibles pagos
+    const palabrasPago = ['pago', 'pagado', 'transferencia', 'referencia', 'capture', 'captura', 'page', 'pague'];
+    const contienePalabraPago = palabrasPago.some(p => normText.includes(p));
+    if (contienePalabraPago || message.hasMedia) {
+      try {
+        if (telegramBot && typeof telegramBot.notificarAdmin === 'function') {
+          let det = `Cliente: *${clienteData ? clienteData.nombre : 'Nuevo/No registrado'}* (${telefonoReal})\n`;
+          if (contienePalabraPago) det += `Texto: "${texto}"\n`;
+          if (message.hasMedia) det += `📎 Contiene archivo multimedia (Capture de pago / Imagen)\n`;
+          telegramBot.notificarAdmin(`💳 *Posible reporte de pago en WhatsApp* 💳\n\n${det}`);
+        }
+      } catch (tgErr) {
+        console.error("Error al enviar alerta de pago por Telegram:", tgErr.message);
+      }
+    }
+    const palabrasDesactivarHumano = ['activar bot', 'iniciar bot', 'bot'];
+    const palabrasActivarHumano = ['soporte', 'operador', 'humano', 'hablar con operador', 'atencion humana', 'hablar con la persona'];
+
+    const matchDesactivar = palabrasDesactivarHumano.some(pc => normText === pc || normText.includes(pc));
+    const matchActivar = palabrasActivarHumano.some(pc => normText.includes(pc));
+
+    if (session.humanMode) {
+      if (matchDesactivar) {
+        session.humanMode = false;
+        if (clienteData) {
+          clienteData.humanMode = false;
+          await dbUpdate('clientes', clienteData.id, { humanMode: false });
+        }
+        await message.reply(`🤖 *Bot automático reactivado.* ¡Ya puedes enviar tus comandos o jugadas de nuevo!`);
+        console.log(`🤖 Bot reactivado por mensaje para el cliente: ${telefonoReal}`);
+        return;
+      }
+      console.log(`👤 [Modo Humano Activo] Ignorando respuesta automática para ${telefonoReal}: "${texto}"`);
+      return;
+    } else {
+      if (matchActivar) {
+        session.humanMode = true;
+        if (clienteData) {
+          clienteData.humanMode = true;
+          await dbUpdate('clientes', clienteData.id, { humanMode: true });
+        }
+        await message.reply(`📞 *Contacto con Operador* 📞\n\nHe pausado mis respuestas automáticas para este chat.\n\nEn breve, la persona encargada te atenderá directamente. 🙋‍♂️\n\n_Si deseas reactivar el bot automático en cualquier momento, escribe *activar bot*._`);
+        console.log(`👤 Bot pausado (Modo Humano) para el cliente: ${telefonoReal}`);
+        return;
+      }
+    }
+
     // FLUJO 1: Cliente nuevo (no registrado)
     if (!clienteData) {
       if (session.estado === 'esperando_nombre') {
@@ -1115,6 +1172,15 @@ client.on('message', async (message) => {
         });
 
         await message.reply(`✅ *Solicitud de retiro registrada con éxito!*\n\nTu retiro de *Bs. ${monto.toLocaleString('de-DE')}* ha sido registrado. Te notificaremos cuando tu Pago Móvil haya sido procesado por administración.`);
+
+        // Notificar al admin por Telegram
+        try {
+          if (telegramBot && typeof telegramBot.notificarAdmin === 'function') {
+            telegramBot.notificarAdmin(`💰 *Nueva Solicitud de Retiro (WhatsApp)* 💰\n\n*Cliente:* ${clienteData.nombre} (${clienteData.telefono})\n*Monto:* Bs. ${monto.toLocaleString('de-DE')}\n*Pago Móvil:* ${datos}`);
+          }
+        } catch (tgErr) {
+          console.error("Error al enviar alerta de retiro al admin por Telegram:", tgErr);
+        }
         
         session.estado = 'idle';
         delete session.montoRetiro;
@@ -1256,7 +1322,9 @@ client.on('message', async (message) => {
               : { hora: '09:00am', esManana: false };
             const horaCierre = calcularHoraCierre(activeSorteo.hora, cierreMinutos);
             const diaStr = activeSorteo.esManana ? ' de mañana' : '';
-            return `🔸 *${l.nombre}* ➔ Sorteo: *${activeSorteo.hora}*${diaStr} (Cierra a las *${horaCierre}*) [Premio: ${l.multiplicador}x, Límite: Bs. ${l.limite.toLocaleString('de-DE')}]`;
+            const isG = l.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("guacharo") || l.id === 'guacharo';
+            const premioLabel = isG ? `${l.multiplicador}x (Animal #75 paga 120x)` : `${l.multiplicador}x`;
+            return `🔸 *${l.nombre}* ➔ Sorteo: *${activeSorteo.hora}*${diaStr} (Cierra a las *${horaCierre}*) [Premio: ${premioLabel}, Límite: Bs. ${l.limite.toLocaleString('de-DE')}]`;
           })
           .join('\n');
         
@@ -1701,6 +1769,48 @@ app.put('/api/clientes/:oldTelefono', async (req, res) => {
   }
 });
 
+// Activar/desactivar bot (modo humano) para un cliente
+app.post('/api/clientes/:telefono/toggle-bot', async (req, res) => {
+  const { telefono } = req.params;
+  const { humanMode } = req.body;
+  try {
+    let targetSession = null;
+    let targetJid = null;
+
+    // Buscar sesión activa
+    for (const key of Object.keys(sessions)) {
+      if (key === telefono || key.split('@')[0] === telefono) {
+        targetSession = sessions[key];
+        targetJid = key;
+        break;
+      }
+    }
+
+    if (!targetSession) {
+      targetJid = `${telefono}@c.us`;
+      sessions[targetJid] = {
+        estado: 'idle',
+        jugadasPendientes: []
+      };
+      targetSession = sessions[targetJid];
+    }
+
+    targetSession.humanMode = !!humanMode;
+
+    const clienteData = cache.clientes.find(c => c.telefono === telefono || c.id === telefono);
+    if (clienteData) {
+      clienteData.humanMode = !!humanMode;
+      await dbUpdate('clientes', clienteData.id, { humanMode: !!humanMode });
+    }
+
+    console.log(`🤖 Bot ${humanMode ? 'DESACTIVADO (Modo Humano)' : 'ACTIVADO'} para el cliente ${telefono}`);
+    res.json({ success: true, humanMode: !!humanMode });
+  } catch (error) {
+    console.error('Error al cambiar modo bot:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Eliminar cliente
 app.delete('/api/clientes/:telefono', async (req, res) => {
   const { telefono } = req.params;
@@ -2112,8 +2222,11 @@ async function registrarResultadoSorteoInternal(loteria, hora, resultado, fecha)
           }
 
           // Si es la lotería Guácharo y el resultado es el comodín 75, el multiplicador es 120x
-          const isGuacharo = loteria.toLowerCase().includes('guacharo');
-          const isComodin75 = resultadoClean === '75' || (matchNumber && parseInt(matchNumber[1], 10) === 75);
+          const isGuacharo = loteria.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('guacharo');
+          const isComodin75 = resultadoClean === '75' || 
+                              resultadoClean.includes('75') || 
+                              resultadoClean.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('guacharo') || 
+                              (matchNumber && parseInt(matchNumber[1], 10) === 75);
           if (isGuacharo && isComodin75) {
             multiplicador = 120;
           }
@@ -2409,6 +2522,16 @@ app.post('/api/retiros/:id/completar', async (req, res) => {
       console.error("Error al notificar al cliente vía WhatsApp:", waErr);
     }
 
+    // Notificar al cliente vía Telegram si está vinculado
+    try {
+      const clienteData = cache.clientes.find(c => c.telefono === rData.clienteTelefono);
+      if (clienteData && clienteData.telegramChatId && telegramBot && typeof telegramBot.sendMessage === 'function') {
+        telegramBot.sendMessage(clienteData.telegramChatId, msg);
+      }
+    } catch (tgErr) {
+      console.error("Error al notificar al cliente vía Telegram:", tgErr);
+    }
+
     res.json({ success: true, message: 'Retiro completado y notificado con éxito.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2457,6 +2580,15 @@ app.post('/api/retiros/:id/rechazar', async (req, res) => {
       console.error("Error al notificar al cliente vía WhatsApp:", waErr);
     }
 
+    // Notificar al cliente vía Telegram si está vinculado
+    try {
+      if (clienteData && clienteData.telegramChatId && telegramBot && typeof telegramBot.sendMessage === 'function') {
+        telegramBot.sendMessage(clienteData.telegramChatId, msg);
+      }
+    } catch (tgErr) {
+      console.error("Error al notificar al cliente vía Telegram:", tgErr);
+    }
+
     res.json({ success: true, message: 'Retiro rechazado y monto reembolsado.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2468,6 +2600,7 @@ app.listen(PORT, async () => {
   await inicializarCache();
   await seedLoteriasIfNeeded();
   iniciarScraperResultados();
+  telegramBot = initTelegramBot({ cache, dbSet, dbUpdate, dbAdd, dbDelete, client });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
