@@ -701,8 +701,11 @@ client.on('message', async (message) => {
       return;
     }
 
-    // Ignorar mensajes de grupos
-    if (telefono.includes('@g.us')) return;
+    // Ignorar mensajes de grupos, boletines (canales) y difusiones
+    if (!telefono.endsWith('@c.us') && !telefono.endsWith('@lid')) {
+      console.log(`🚫 Mensaje de JID no soportado [${telefono}] ignorado.`);
+      return;
+    }
 
     // Obtener contacto y resolver número de teléfono real
     const contact = await message.getContact();
