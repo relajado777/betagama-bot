@@ -485,13 +485,25 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
     if (cache.riesgos.factorCupoColectivo !== undefined) factorColectivo = parseFloat(cache.riesgos.factorCupoColectivo);
   }
 
-  for (const j of jugadas) {
+  const montosValidadosEnLote = {};
+
+  for (let i = 0; i < jugadas.length; i++) {
+    const j = jugadas[i];
     const animalNum = j.numero;
     
     if (animalesBloqueados.includes(animalNum)) {
       session.estado = 'idle';
       session.jugadasPendientes = [];
-      await message.reply(`⚠️ *Jugada Agotada*\n\nLo siento, las apuestas para el animalito *${j.animal.toUpperCase()} (#${animalNum})* están **Agotadas** (temporalmente cerradas por políticas de riesgo de la agencia).`);
+      const animalCapitalized = j.animal.toUpperCase();
+      
+      session.ultimaJugadaRechazada = {
+        jugada: j,
+        limiteDisponible: 0,
+        indexRechazado: i,
+        todasLasJugadas: jugadas
+      };
+      
+      await message.reply(`El ${animalCapitalized} (#${animalNum}) está disponible por el monto máximo de hasta Bs. 0.`);
       return false;
     }
 
@@ -593,52 +605,73 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
 
     const limiteIndividual = limiteLoteria * factorReduccion;
 
-    // 1. Validación de Límite Individual
-    if (j.monto > limiteIndividual) {
-      session.estado = 'idle';
-      session.jugadasPendientes = [];
-      const animalCapitalized = j.animal.toUpperCase();
-      
-      // Guardar el contexto del rechazo para permitir "ponlo por X"
-      session.ultimaJugadaRechazada = {
-        jugada: j,
-        limiteDisponible: limiteIndividual
-      };
-
-      await message.reply(`⚠️ *Cupo Límite Superado*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** para el monto solicitado de Bs. ${j.monto.toLocaleString('de-DE')}.\n\n👉 El *${animalCapitalized} (#${animalNum})* está disponible por el monto máximo de hasta *Bs. ${limiteIndividual.toLocaleString('de-DE')}*.`);
-      return false;
-    }
-
-    // 2. Validación de Límite Colectivo (Cupo General de la Agencia por Animal para este Sorteo)
-    const limiteColectivo = limiteIndividual * factorColectivo;
-
-    const matchingJugadas = cache.jugadas.filter(existingPlay =>
+    // 1. Validación de Límite Individual Acumulativo
+    const matchingJugadasCliente = cache.jugadas.filter(existingPlay =>
+      (existingPlay.clienteTelefono === (clienteData.telefono || telefonoReal) || existingPlay.clienteJid === telefono) &&
       existingPlay.loteria === lotName &&
       existingPlay.sorteoHora === j.sorteoHora &&
       (existingPlay.sorteoFecha ? existingPlay.sorteoFecha === j.sorteoFecha : existingPlay.fecha.split('T')[0] === j.sorteoFecha) &&
       existingPlay.estado !== 'anulada' &&
       existingPlay.valor.includes(`(#${animalNum})`)
     );
-    const totalApostadoColectivo = matchingJugadas.reduce((sum, existingPlay) => sum + existingPlay.monto, 0);
-    const cupoColectivoDisponible = Math.max(0, limiteColectivo - totalApostadoColectivo);
+    const totalApostadoClienteCache = matchingJugadasCliente.reduce((sum, existingPlay) => sum + existingPlay.monto, 0);
+
+    const loteKey = `${lotName}_${j.sorteoHora}_${animalNum}`;
+    const totalApostadoClienteLote = montosValidadosEnLote[loteKey] || 0;
+    
+    const totalApostadoClienteTotal = totalApostadoClienteCache + totalApostadoClienteLote;
+    const cupoIndividualDisponible = Math.max(0, limiteIndividual - totalApostadoClienteTotal);
+
+    if (j.monto > cupoIndividualDisponible) {
+      session.estado = 'idle';
+      session.jugadasPendientes = [];
+      const animalCapitalized = j.animal.toUpperCase();
+      
+      session.ultimaJugadaRechazada = {
+        jugada: j,
+        limiteDisponible: cupoIndividualDisponible,
+        indexRechazado: i,
+        todasLasJugadas: jugadas
+      };
+
+      await message.reply(`El ${animalCapitalized} (#${animalNum}) está disponible por el monto máximo de hasta Bs. ${cupoIndividualDisponible.toLocaleString('de-DE')}.`);
+      return false;
+    }
+
+    // 2. Validación de Límite Colectivo Acumulativo (Cupo General de la Agencia por Animal para este Sorteo)
+    const limiteColectivo = limiteIndividual * factorColectivo;
+
+    const matchingJugadasColectivo = cache.jugadas.filter(existingPlay =>
+      existingPlay.loteria === lotName &&
+      existingPlay.sorteoHora === j.sorteoHora &&
+      (existingPlay.sorteoFecha ? existingPlay.sorteoFecha === j.sorteoFecha : existingPlay.fecha.split('T')[0] === j.sorteoFecha) &&
+      existingPlay.estado !== 'anulada' &&
+      existingPlay.valor.includes(`(#${animalNum})`)
+    );
+    const totalApostadoColectivoCache = matchingJugadasColectivo.reduce((sum, existingPlay) => sum + existingPlay.monto, 0);
+    const totalApostadoColectivoLote = montosValidadosEnLote[loteKey] || 0;
+    const totalApostadoColectivoTotal = totalApostadoColectivoCache + totalApostadoColectivoLote;
+    
+    const cupoColectivoDisponible = Math.max(0, limiteColectivo - totalApostadoColectivoTotal);
 
     if (j.monto > cupoColectivoDisponible) {
       session.estado = 'idle';
       session.jugadasPendientes = [];
       const animalCapitalized = j.animal.toUpperCase();
 
-      if (cupoColectivoDisponible === 0) {
-        await message.reply(`⚠️ *Jugada Agotada*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** (cupo general de la agencia lleno) para este sorteo.`);
-      } else {
-        // Guardar el contexto del rechazo para permitir "ponlo por X"
-        session.ultimaJugadaRechazada = {
-          jugada: j,
-          limiteDisponible: cupoColectivoDisponible
-        };
-        await message.reply(`⚠️ *Cupo Límite Superado*\n\nLo siento, las apuestas para el animalito *${animalCapitalized} (#${animalNum})* están **Agotadas** para el monto solicitado de Bs. ${j.monto.toLocaleString('de-DE')}.\n\n👉 El *${animalCapitalized} (#${animalNum})* está disponible solo por el monto máximo restante de *Bs. ${cupoColectivoDisponible.toLocaleString('de-DE')}* para este sorteo.`);
-      }
+      session.ultimaJugadaRechazada = {
+        jugada: j,
+        limiteDisponible: cupoColectivoDisponible,
+        indexRechazado: i,
+        todasLasJugadas: jugadas
+      };
+      
+      await message.reply(`El ${animalCapitalized} (#${animalNum}) está disponible por el monto máximo de hasta Bs. ${cupoColectivoDisponible.toLocaleString('de-DE')}.`);
       return false;
     }
+
+    // Registrar monto validado para esta jugada
+    montosValidadosEnLote[loteKey] = (montosValidadosEnLote[loteKey] || 0) + j.monto;
   }
 
   session.jugadasPendientes = jugadas;
@@ -774,7 +807,12 @@ client.on('message', async (message) => {
         await dbSet('clientes', telefonoReal, nuevoCliente);
         
         session.estado = 'idle';
-        await message.reply(`✅ Registrado con éxito, *${nombreCliente}*.\nYa puedes enviar tus jugadas.\n\n_Ejemplo: "perro 5000 lotto activo y gato 3000 granjita"_`);
+        const activeLoteriasNames = cache.loterias
+          .filter(l => l.activa !== false)
+          .map(l => `*${l.nombre}*`)
+          .join(', ');
+
+        await message.reply(`✅ Registrado con éxito, *${nombreCliente}*.\nYa puedes enviar tus jugadas.\n\n🎰 *Loterías disponibles hoy:* ${activeLoteriasNames || 'Ninguna por el momento'}\n\n_Ejemplo: "perro 5000 lotto activo y gato 3000 granjita"_`);
         console.log(`👤 Nuevo cliente registrado: ${nombreCliente} (${telefonoReal})`);
         return;
       } else {
@@ -1037,9 +1075,9 @@ client.on('message', async (message) => {
       }
     }
 
-    // FLUJO CONTEXTUAL: Ajustar jugada rechazada ("ponlo por X", "ponlo en X", "entonces ponlo por X")
-    const cleanedText = cleanText(texto);
-    const matchPonloPor = cleanedText.match(/^(?:entonces\s+)?ponlo\s+(?:por|en)\s+(\d+|el\s+maximo|el\s+max)$/i);
+    // FLUJO CONTEXTUAL: Ajustar jugada rechazada ("ponlo por X", "ponlo en X", "entonces ponlo por X", "ponlo por")
+    const cleanedText = cleanText(texto).replace(/[.,;:!?]/g, '').trim();
+    const matchPonloPor = cleanedText.match(/^(?:entonces\s+)?ponlo(?:\s+(?:por|en))?(?:\s+(\d+|el\s+maximo|el\s+max|maximo|max))?\s*$/i);
     if (matchPonloPor) {
       if (!session.ultimaJugadaRechazada) {
         await message.reply(`⚠️ No tengo registro de ninguna jugada rechazada reciente para ajustar en esta conversación.`);
@@ -1047,10 +1085,10 @@ client.on('message', async (message) => {
       }
 
       let montoAjustado = 0;
-      const param = matchPonloPor[1];
+      const param = matchPonloPor[1] ? matchPonloPor[1].trim() : null;
       const limiteDisponible = session.ultimaJugadaRechazada.limiteDisponible;
 
-      if (param === 'el maximo' || param === 'el max') {
+      if (!param || param === 'el maximo' || param === 'el max' || param === 'maximo' || param === 'max') {
         montoAjustado = limiteDisponible;
       } else {
         montoAjustado = parseFloat(param);
@@ -1066,76 +1104,47 @@ client.on('message', async (message) => {
         return;
       }
 
-      // Re-construir la jugada con el monto ajustado
-      const jugadaOriginal = session.ultimaJugadaRechazada.jugada;
-      const jugadaAjustada = {
-        ...jugadaOriginal,
-        monto: montoAjustado
-      };
+      // Re-construir lote completo
+      let loteCompleto = [];
+      let idxAdjusted = -1;
+      
+      if (session.ultimaJugadaRechazada.todasLasJugadas) {
+        loteCompleto = [...session.ultimaJugadaRechazada.todasLasJugadas];
+        idxAdjusted = session.ultimaJugadaRechazada.indexRechazado !== undefined ? session.ultimaJugadaRechazada.indexRechazado : -1;
+        if (idxAdjusted >= 0 && idxAdjusted < loteCompleto.length) {
+          loteCompleto[idxAdjusted] = {
+            ...loteCompleto[idxAdjusted],
+            monto: montoAjustado
+          };
+        }
+      } else {
+        const jugadaOriginal = session.ultimaJugadaRechazada.jugada;
+        loteCompleto = [{
+          ...jugadaOriginal,
+          monto: montoAjustado
+        }];
+        idxAdjusted = 0;
+      }
 
       // Limpiar el contexto para evitar ejecuciones repetidas
       delete session.ultimaJugadaRechazada;
 
       // Colocar en jugadas pendientes y cambiar a esperando confirmación
-      session.jugadasPendientes = [jugadaAjustada];
+      session.jugadasPendientes = loteCompleto;
       session.estado = 'esperando_confirmacion';
 
-      let msgConfirmacion = `📋 *Confirma tu jugada ajustada, ${nombreCliente}:*\n\n`;
-      msgConfirmacion += `1. *${(jugadaAjustada.loteria || 'Lotto Activo').toUpperCase()}* (${jugadaAjustada.sorteoHora}) ➔ ${jugadaAjustada.animal.toUpperCase()} (#${jugadaAjustada.numero}) — Bs. ${montoAjustado.toLocaleString('de-DE')}\n\n`;
-      msgConfirmacion += `💰 Total a pagar: *Bs. ${montoAjustado.toLocaleString('de-DE')}*\n\n`;
-      msgConfirmacion += `Responde *SI* para registrar tu jugada o *NO* para cancelarla.`;
+      let msgConfirmacion = `📋 *Confirma tus jugadas, ${nombreCliente}:*\n\n`;
+      let total = 0;
+      loteCompleto.forEach((j, index) => {
+        const lot = j.loteria ? j.loteria.toUpperCase() : 'LOTTO ACTIVO';
+        const isAdjusted = index === idxAdjusted;
+        msgConfirmacion += `${index + 1}. *${lot}* (${j.sorteoHora}) ➔ ${j.animal.toUpperCase()} (#${j.numero}) — Bs. ${j.monto.toLocaleString('de-DE')}${isAdjusted ? ' ⚠️ _(Ajustado)_' : ''}\n`;
+        total += j.monto;
+      });
+      msgConfirmacion += `\n💰 Total a pagar: *Bs. ${total.toLocaleString('de-DE')}*\n\n`;
+      msgConfirmacion += `Responde *SI* para registrar tus jugadas o *NO* para cancelarlas.`;
 
       await message.reply(msgConfirmacion);
-      return;
-    }
-
-    // FLUJO: Consulta de Loterías Disponibles
-    const palabrasClaveLoterias = ['cuales loterias', 'loterias disponibles', 'loterias activas', 'que loterias hay', 'loterias hay', 'lista de loterias', 'loterias'];
-    if (palabrasClaveLoterias.some(pc => cleanedText === pc || cleanedText === 'loterias')) {
-      const activeLoteriasNames = cache.loterias
-        .filter(l => l.activa !== false)
-        .map(l => `🔸 *${l.nombre}* (Premio: ${l.multiplicador}x, Límite: Bs. ${l.limite.toLocaleString('de-DE')})`)
-        .join('\n');
-      
-      await message.reply(`🎰 *Loterías Disponibles hoy:*\n\n${activeLoteriasNames || 'No hay loterías activas por el momento.'}\n\n_Para realizar una jugada, escribe el nombre del animalito, monto y la lotería. Ejemplo: "mono 2000 granjita"_`);
-      return;
-    }
-
-    // FLUJO: Consulta de Deuda ("cuanto debo", "deuda", "saldo")
-    const palabrasClaveDeuda = ['cuanto debo', 'mi deuda', 'deuda', 'saldo', 'pagar'];
-    if (palabrasClaveDeuda.some(pc => cleanText(texto).includes(pc))) {
-      // Consultar jugadas con deuda en memoria
-      const jugadasQuery = cache.jugadas.filter(j => j.clienteTelefono === clienteData.telefono && j.estadoPago === 'deuda');
-      const totalDeuda = clienteData.deuda || 0;
-
-      if (jugadasQuery.length === 0 || totalDeuda === 0) {
-        await message.reply(`💳 *Saldo Pendiente:* Bs. 0\n\nNo tienes jugadas pendientes de pago. ¡Estás al día! 👍`);
-      } else {
-        let msgDeuda = `💳 *Tu saldo pendiente:* Bs. *${totalDeuda.toLocaleString('de-DE')}*\n\n*Jugadas sin pagar:* \n`;
-        let counter = 1;
-        jugadasQuery.forEach(j => {
-          const fechaFormateada = new Date(j.fecha).toLocaleDateString('es-VE', {hour: '2-digit', minute:'2-digit'});
-          msgDeuda += `${counter}. #${j.ticketNumero || 'Ticket'} (${fechaFormateada}) - *${j.valor}* en *${j.loteria}* - Bs. ${j.monto.toLocaleString('de-DE')}\n`;
-          counter++;
-        });
-        msgDeuda += `\nPara registrar un pago, comunícate con el administrador o reporta tu transferencia.`;
-        await message.reply(msgDeuda);
-      }
-      return;
-    }
-
-    // FLUJO: Solicitud de Retiro ("retirar", "retiro", "pago movil", "cobrar premio")
-    const palabrasClaveRetiro = ['retirar', 'retiro', 'pago movil', 'cobrar premio', 'cobrar mi premio'];
-    if (palabrasClaveRetiro.some(pc => cleanText(texto).includes(pc)) && session.estado === 'idle') {
-      const saldoFavor = clienteData.deuda < 0 ? Math.abs(clienteData.deuda) : 0;
-      
-      if (saldoFavor <= 0) {
-        await message.reply(`⚠️ *Retiro no disponible*\n\nActualmente no posees saldo a favor disponible para retirar. Tu balance es de Bs. ${clienteData.deuda.toLocaleString('de-DE')} (pendiente de pago).`);
-        return;
-      }
-      
-      session.estado = 'esperando_monto_retiro';
-      await message.reply(`💰 *Solicitud de Retiro*\n\nPosees un saldo a favor de *Bs. ${saldoFavor.toLocaleString('de-DE')}*.\n\n*¿Cuánto deseas retirar?* (Responde solo con el número del monto en Bolívares)`);
       return;
     }
 
@@ -1168,7 +1177,58 @@ client.on('message', async (message) => {
 
       await procesarLimitesYSorteosDeJugadas(interpretacion.jugadas, loteriasList, message, session, clienteData, nombreCliente);
     } else {
-      // El mensaje no se entendió como una jugada válida y el cliente ya está registrado
+      // Si el mensaje no se entendió como una jugada válida, comprobamos palabras clave
+
+      // FLUJO: Consulta de Loterías Disponibles
+      const palabrasClaveLoterias = ['cuales loterias', 'loterias disponibles', 'loterias activas', 'que loterias hay', 'loterias hay', 'lista de loterias', 'loterias', 'loteria'];
+      if (palabrasClaveLoterias.some(pc => cleanedText.includes(pc))) {
+        const activeLoteriasNames = cache.loterias
+          .filter(l => l.activa !== false)
+          .map(l => `🔸 *${l.nombre}* (Premio: ${l.multiplicador}x, Límite: Bs. ${l.limite.toLocaleString('de-DE')})`)
+          .join('\n');
+        
+        await message.reply(`🎰 *Loterías Disponibles hoy:*\n\n${activeLoteriasNames || 'No hay loterías activas por el momento.'}\n\n_Para realizar una jugada, escribe el nombre del animalito, monto y la lotería. Ejemplo: "mono 2000 granjita"_`);
+        return;
+      }
+
+      // FLUJO: Consulta de Deuda ("cuanto debo", "deuda", "saldo")
+      const palabrasClaveDeuda = ['cuanto debo', 'mi deuda', 'deuda', 'saldo', 'pagar'];
+      if (palabrasClaveDeuda.some(pc => cleanedText.includes(pc))) {
+        const jugadasQuery = cache.jugadas.filter(j => j.clienteTelefono === clienteData.telefono && j.estadoPago === 'deuda');
+        const totalDeuda = clienteData.deuda || 0;
+
+        if (jugadasQuery.length === 0 || totalDeuda === 0) {
+          await message.reply(`💳 *Saldo Pendiente:* Bs. 0\n\nNo tienes jugadas pendientes de pago. ¡Estás al día! 👍`);
+        } else {
+          let msgDeuda = `💳 *Tu saldo pendiente:* Bs. *${totalDeuda.toLocaleString('de-DE')}*\n\n*Jugadas sin pagar:* \n`;
+          let counter = 1;
+          jugadasQuery.forEach(j => {
+            const fechaFormateada = new Date(j.fecha).toLocaleDateString('es-VE', {hour: '2-digit', minute:'2-digit'});
+            msgDeuda += `${counter}. #${j.ticketNumero || 'Ticket'} (${fechaFormateada}) - *${j.valor}* en *${j.loteria}* - Bs. ${j.monto.toLocaleString('de-DE')}\n`;
+            counter++;
+          });
+          msgDeuda += `\nPara registrar un pago, comunícate con el administrador o reporta tu transferencia.`;
+          await message.reply(msgDeuda);
+        }
+        return;
+      }
+
+      // FLUJO: Solicitud de Retiro ("retirar", "retiro", "pago movil", "cobrar premio")
+      const palabrasClaveRetiro = ['retirar', 'retiro', 'pago movil', 'cobrar premio', 'cobrar mi premio'];
+      if (palabrasClaveRetiro.some(pc => cleanedText.includes(pc)) && session.estado === 'idle') {
+        const saldoFavor = clienteData.deuda < 0 ? Math.abs(clienteData.deuda) : 0;
+        
+        if (saldoFavor <= 0) {
+          await message.reply(`⚠️ *Retiro no disponible*\n\nActualmente no posees saldo a favor disponible para retirar. Tu balance es de Bs. ${clienteData.deuda.toLocaleString('de-DE')} (pendiente de pago).`);
+          return;
+        }
+        
+        session.estado = 'esperando_monto_retiro';
+        await message.reply(`💰 *Solicitud de Retiro*\n\nPosees un saldo a favor de *Bs. ${saldoFavor.toLocaleString('de-DE')}*.\n\n*¿Cuánto deseas retirar?* (Responde solo con el número del monto en Bolívares)`);
+        return;
+      }
+
+      // El mensaje no se entendió como una jugada válida y no coincide con palabras clave
       const activeLoteriasNames = cache.loterias
         .filter(l => l.activa !== false)
         .map(l => `*${l.nombre}*`)
