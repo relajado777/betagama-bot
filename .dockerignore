@@ -1,0 +1,7 @@
+node_modules
+.wwebjs_cache
+.wwebjs_auth
+.env
+npm-debug.log
+*.log
+cache_backup.json
