@@ -662,7 +662,12 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
 client.on('message', async (message) => {
   try {
     const telefono = message.from; // Identificador único (ej: 584121234567@c.us)
-    const texto = message.body.trim();
+    const texto = (message.body || '').trim();
+
+    // Ignorar si el mensaje no contiene texto (como imágenes sin leyenda, stickers, audios o mensajes del sistema)
+    if (!texto) {
+      return;
+    }
     
     // Sobrescribir message.reply para evitar caídas en JIDs especiales (como @lid) o cambios en WA Web,
     // e introducir simulación de escritura humana (typing delay) para prevenir bloqueos por spam.
