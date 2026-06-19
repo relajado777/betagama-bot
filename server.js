@@ -1279,15 +1279,23 @@ app.post('/api/bot/reset', async (req, res) => {
       console.warn('Advertencia al destruir cliente:', destroyErr.message);
     }
     
-    // Borrar la carpeta de autenticación
+    // Dar 1.5 segundos para que Puppeteer se cierre por completo y libere los archivos
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Borrar el contenido de la carpeta de autenticación (sin borrar la carpeta en sí porque es un volumen montado)
     const authPath = path.resolve('./.wwebjs_auth');
     if (fs.existsSync(authPath)) {
-      fs.rmSync(authPath, { recursive: true, force: true });
-      console.log('🗑️ Carpeta .wwebjs_auth eliminada con éxito.');
+      const files = fs.readdirSync(authPath);
+      for (const file of files) {
+        const curPath = path.join(authPath, file);
+        try {
+          fs.rmSync(curPath, { recursive: true, force: true });
+        } catch (rmErr) {
+          console.warn(`No se pudo borrar el archivo/directorio ${file}:`, rmErr.message);
+        }
+      }
+      console.log('🗑️ Contenido de .wwebjs_auth eliminado con éxito.');
     }
-    
-    // Volver a crear el directorio
-    fs.mkdirSync(authPath, { recursive: true });
     
     // Reiniciar el estado
     botState = 'disconnected';
