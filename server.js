@@ -417,7 +417,10 @@ const chromiumArgs = [
 ];
 
 const puppeteerConfig = isCloud
-  ? { args: chromiumArgs }  // En la nube: Puppeteer usa su Chromium descargado
+  ? {
+      executablePath: '/usr/bin/chromium',
+      args: chromiumArgs
+    }
   : {
       executablePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       args: chromiumArgs
@@ -2131,10 +2134,7 @@ app.listen(PORT, async () => {
   iniciarScraperResultados();
 });
 
-// Capturar errores de promesas no manejadas (ej: ErrorEvent de Puppeteer/Chromium)
-// para evitar que el proceso de Node.js se cierre abruptamente
 process.on('unhandledRejection', (reason, promise) => {
-  const msg = reason instanceof Error ? reason.message : String(reason);
-  // Errores internos de Chromium/WhatsApp Web son esperados; solo registrar en log
-  console.warn('⚠️ [Promesa No Manejada] Ignorada para evitar crash:', msg?.substring(0, 200));
+  // Registrar error completo para depuración, pero no tirar el servidor
+  console.error('⚠️ [Promesa No Manejada] Ignorada para evitar crash:', reason);
 });
