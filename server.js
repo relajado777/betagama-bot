@@ -843,6 +843,13 @@ client.on('message', async (message) => {
         msgConfirm += `\n⏳ Las jugadas han sido enviadas al operador del panel. ¡Mucha suerte! 🍀`;
 
         await message.reply(msgConfirm);
+
+        // Enviar instrucciones de pago móvil si están configuradas
+        const pm = cache.configuracion.pagoMovil;
+        if (pm && pm.telefono && pm.banco) {
+          const msgPago = `💳 *Instrucciones de Pago*\n\nPara procesar tu jugada debes realizar el pago móvil por *Bs. ${totalMonto.toLocaleString('de-DE')}* a los siguientes datos:\n\n🏦 *Banco:* ${pm.banco}\n📱 *Teléfono:* ${pm.telefono}\n🪪 *Cédula/RIF:* ${pm.cedula || 'N/A'}\n👤 *Nombre:* ${pm.nombre || 'N/A'}\n\n📸 *Envía el capture del comprobante de pago* a este mismo chat.\n\n⚠️ _De no poder verificarse el pago, la jugada será anulada automáticamente._`;
+          await message.reply(msgPago);
+        }
         
         // Limpiar estado
         session.estado = 'idle';
@@ -1259,13 +1266,14 @@ app.get('/api/configuracion', (req, res) => {
       "lotto activo": 5000,
       "la granjita": 4000,
       "guacharo": 3000
-    }
+    },
+    pagoMovil: cache.configuracion.pagoMovil || {}
   });
 });
 
 // Guardar configuración general
 app.post('/api/configuracion', async (req, res) => {
-  const { limiteMaxJugada, limitesPorLoteria } = req.body;
+  const { limiteMaxJugada, limitesPorLoteria, pagoMovil } = req.body;
   try {
     const updateData = { limiteMaxJugada: parseFloat(limiteMaxJugada) || 10000 };
     if (limitesPorLoteria) {
@@ -1275,8 +1283,17 @@ app.post('/api/configuracion', async (req, res) => {
         "guacharo": parseFloat(limitesPorLoteria["guacharo"]) || 3000
       };
     }
+    // Guardar datos de Pago Móvil si vienen en el body
+    if (pagoMovil) {
+      updateData.pagoMovil = {
+        telefono: pagoMovil.telefono || '',
+        banco: pagoMovil.banco || '',
+        cedula: pagoMovil.cedula || '',
+        nombre: pagoMovil.nombre || ''
+      };
+    }
     await dbSet('configuracion', 'general', updateData, true);
-    res.json({ success: true, message: 'Configuración de límites guardada.' });
+    res.json({ success: true, message: 'Configuración guardada.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1886,10 +1903,21 @@ async function ejecutarScraperResultados() {
   }
 }
 
-// Iniciar el scraper automático cada 5 minutos
+// Iniciar el scraper automático cada 5 minutos, solo entre 08:00 AM y 08:00 PM (hora Caracas)
 function iniciarScraperResultados() {
-  ejecutarScraperResultados();
-  setInterval(ejecutarScraperResultados, 5 * 60 * 1000);
+  const ejecutarSiEnHorario = async () => {
+    const horaCaracas = parseInt(
+      new Date().toLocaleTimeString('en-US', { timeZone: 'America/Caracas', hour: 'numeric', hour12: false })
+    );
+    if (horaCaracas >= 8 && horaCaracas < 20) {
+      await ejecutarScraperResultados();
+    } else {
+      console.log(`🌙 [Scraper] Fuera de horario (${horaCaracas}:xx). Solo opera entre 08:00 AM y 08:00 PM.`);
+    }
+  };
+
+  ejecutarSiEnHorario(); // Ejecutar inmediatamente al iniciar
+  setInterval(ejecutarSiEnHorario, 5 * 60 * 1000); // Cada 5 minutos
 }
 
 // Obtener todos los sorteos cargados
