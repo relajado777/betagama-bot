@@ -1417,6 +1417,31 @@ app.put('/api/clientes/:oldTelefono', async (req, res) => {
   }
 });
 
+// Eliminar cliente
+app.delete('/api/clientes/:telefono', async (req, res) => {
+  const { telefono } = req.params;
+  try {
+    const clienteIdx = cache.clientes.findIndex(c => c.id === telefono || c.telefono === telefono);
+    if (clienteIdx === -1) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    const cliente = cache.clientes[clienteIdx];
+
+    // Eliminar del cache
+    cache.clientes.splice(clienteIdx, 1);
+
+    // Eliminar de Firestore en background
+    dbDelete('clientes', cliente.id || telefono);
+
+    console.log(`🗑️ Cliente eliminado: ${cliente.nombre} (${telefono})`);
+    res.json({ success: true, message: `Cliente ${cliente.nombre} eliminado correctamente.` });
+  } catch (error) {
+    console.error('Error al eliminar cliente:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Registrar pago / abono de deuda de un cliente
 app.post('/api/clientes/:telefono/pago', async (req, res) => {
   const { telefono } = req.params;
