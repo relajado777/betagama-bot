@@ -315,6 +315,44 @@ function obtenerSorteoActivoDynamic(horarios, cierreMinutos = 5) {
   return { hora: sortedHorarios[0], esManana: true };
 }
 
+function calcularHoraCierre(sorteoHora, cierreMinutos = 5) {
+  try {
+    const parseTimeToMinutes = (h) => {
+      const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+      if (!matches) return 0;
+      let hr = parseInt(matches[1], 10);
+      const min = parseInt(matches[2], 10);
+      const meridiano = matches[3].toLowerCase();
+      if (meridiano === 'pm' && hr < 12) hr += 12;
+      if (meridiano === 'am' && hr === 12) hr = 0;
+      return hr * 60 + min;
+    };
+
+    const formatMinutesToTime = (totalMin) => {
+      let hr = Math.floor(totalMin / 60);
+      let min = totalMin % 60;
+      let meridiano = 'am';
+      
+      if (hr >= 12) {
+        meridiano = 'pm';
+        if (hr > 12) hr -= 12;
+      } else if (hr === 0) {
+        hr = 12;
+      }
+      
+      const minStr = min.toString().padStart(2, '0');
+      return `${hr}:${minStr}${meridiano}`;
+    };
+
+    const minutosSorteo = parseTimeToMinutes(sorteoHora);
+    const minutosCierre = minutosSorteo - cierreMinutos;
+    const minutosNormalizados = (minutosCierre + 24 * 60) % (24 * 60);
+    return formatMinutesToTime(minutosNormalizados);
+  } catch (err) {
+    return sorteoHora;
+  }
+}
+
 async function obtenerSorteoActivo(loteria) {
   try {
     const lotNameClean = loteria.toLowerCase().trim().replace(/\s+/g, '_');
@@ -952,7 +990,15 @@ client.on('message', async (message) => {
       }
 
       if (!matchedLottery) {
-        const listadoOpciones = loteriasList.map((l, index) => `${index + 1}️⃣ *${l.nombre}*`).join('\n');
+        const listadoOpciones = loteriasList.map((l, index) => {
+          const cierreMinutos = l.cierreAnticipado !== undefined ? parseInt(l.cierreAnticipado, 10) : 5;
+          const activeSorteo = l.horarios && l.horarios.length > 0
+            ? obtenerSorteoActivoDynamic(l.horarios, cierreMinutos)
+            : { hora: '09:00am', esManana: false };
+          const horaCierre = calcularHoraCierre(activeSorteo.hora, cierreMinutos);
+          const diaStr = activeSorteo.esManana ? ' de mañana' : '';
+          return `${index + 1}️⃣ *${l.nombre}* ➔ Sorteo: *${activeSorteo.hora}*${diaStr} (Cierra: *${horaCierre}*)`;
+        }).join('\n');
         await message.reply(`⚠️ *Lotería no reconocida.*\n\nPor favor, responde con el número o el nombre de una de las siguientes loterías activas:\n\n${listadoOpciones}\n\nEscribe *cancelar* si deseas abortar.`);
         return;
       }
@@ -1161,7 +1207,15 @@ client.on('message', async (message) => {
         session.jugadasPendientes = interpretacion.jugadas;
         session.estado = 'esperando_loteria';
 
-        const listadoOpciones = loteriasList.map((l, idx) => `${idx + 1}️⃣ *${l.nombre}*`).join('\n');
+        const listadoOpciones = loteriasList.map((l, idx) => {
+          const cierreMinutos = l.cierreAnticipado !== undefined ? parseInt(l.cierreAnticipado, 10) : 5;
+          const activeSorteo = l.horarios && l.horarios.length > 0
+            ? obtenerSorteoActivoDynamic(l.horarios, cierreMinutos)
+            : { hora: '09:00am', esManana: false };
+          const horaCierre = calcularHoraCierre(activeSorteo.hora, cierreMinutos);
+          const diaStr = activeSorteo.esManana ? ' de mañana' : '';
+          return `${idx + 1}️⃣ *${l.nombre}* ➔ Sorteo: *${activeSorteo.hora}*${diaStr} (Cierra: *${horaCierre}*)`;
+        }).join('\n');
         
         let msgSinLoteria = `¡Hola *${nombreCliente}*! 😊\n\nEntendido, deseas registrar una jugada:\n\n`;
         interpretacion.jugadas.forEach((j) => {
@@ -1184,7 +1238,15 @@ client.on('message', async (message) => {
       if (palabrasClaveLoterias.some(pc => cleanedText.includes(pc))) {
         const activeLoteriasNames = cache.loterias
           .filter(l => l.activa !== false)
-          .map(l => `🔸 *${l.nombre}* (Premio: ${l.multiplicador}x, Límite: Bs. ${l.limite.toLocaleString('de-DE')})`)
+          .map(l => {
+            const cierreMinutos = l.cierreAnticipado !== undefined ? parseInt(l.cierreAnticipado, 10) : 5;
+            const activeSorteo = l.horarios && l.horarios.length > 0
+              ? obtenerSorteoActivoDynamic(l.horarios, cierreMinutos)
+              : { hora: '09:00am', esManana: false };
+            const horaCierre = calcularHoraCierre(activeSorteo.hora, cierreMinutos);
+            const diaStr = activeSorteo.esManana ? ' de mañana' : '';
+            return `🔸 *${l.nombre}* ➔ Sorteo: *${activeSorteo.hora}*${diaStr} (Cierra a las *${horaCierre}*) [Premio: ${l.multiplicador}x, Límite: Bs. ${l.limite.toLocaleString('de-DE')}]`;
+          })
           .join('\n');
         
         await message.reply(`🎰 *Loterías Disponibles hoy:*\n\n${activeLoteriasNames || 'No hay loterías activas por el momento.'}\n\n_Para realizar una jugada, escribe el nombre del animalito, monto y la lotería. Ejemplo: "mono 2000 granjita"_`);
