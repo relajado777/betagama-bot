@@ -1445,6 +1445,28 @@ function cleanText(text) {
   return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+// Borrar el archivo de bloqueo de Chromium para evitar el error "profile in use"
+const deleteSingletonLocks = (dir) => {
+  try {
+    if (!fs.existsSync(dir)) return;
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      const stat = fs.lstatSync(fullPath);
+      if (stat.isDirectory()) {
+        deleteSingletonLocks(fullPath);
+      } else if (file === 'SingletonLock') {
+        fs.unlinkSync(fullPath);
+        console.log(`🧹 Archivo SingletonLock eliminado en: ${fullPath}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`⚠️ Error al limpiar SingletonLock en ${dir}:`, err.message);
+  }
+};
+
+deleteSingletonLocks(path.join(process.cwd(), '.wwebjs_auth'));
+
 // Inicializar el cliente de WhatsApp
 try {
   client.initialize();
