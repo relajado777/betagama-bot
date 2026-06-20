@@ -2,6 +2,33 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import pkg from 'whatsapp-web.js';
+
+// --- CAPTURA DE LOGS EN MEMORIA ---
+const consoleLogs = [];
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+
+console.log = (...args) => {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  consoleLogs.push(`[LOG] ${new Date().toISOString()} - ${msg}`);
+  if (consoleLogs.length > 500) consoleLogs.shift();
+  originalLog(...args);
+};
+
+console.error = (...args) => {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  consoleLogs.push(`[ERROR] ${new Date().toISOString()} - ${msg}`);
+  if (consoleLogs.length > 500) consoleLogs.shift();
+  originalError(...args);
+};
+
+console.warn = (...args) => {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  consoleLogs.push(`[WARN] ${new Date().toISOString()} - ${msg}`);
+  if (consoleLogs.length > 500) consoleLogs.shift();
+  originalWarn(...args);
+};
 import qrcodeTerminal from 'qrcode-terminal';
 import { db, isMock } from './config/firebase.js';
 import { interpretarMensaje, ANIMALITOS_MAP, GUACHARO_ANIMALITOS_MAP } from './services/interpreter.js';
@@ -1542,6 +1569,12 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
 // Obtener estado del Bot de WhatsApp y API
 app.get('/api/status', (req, res) => {
   res.json({ whatsapp: botState, paused: botPaused, qr: latestQr });
+});
+
+// Obtener logs del servidor en tiempo real
+app.get('/api/logs', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.send(consoleLogs.join('\n'));
 });
 
 // Activar / Pausar el bot sin desconectar WhatsApp
