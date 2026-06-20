@@ -137,6 +137,25 @@ Object.entries(ANIMALITOS_MAP).forEach(([num, name]) => {
   }
 });
 
+// Sinónimos comunes de animalitos en Venezuela
+const ANIMAL_SYNONYMS = {
+  "cabra": "chivo",       // #19
+  "cabrilla": "chivo",
+  "puerco": "cochino",    // #20
+  "cerdo": "cochino",
+  "serpiente": "culebra", // #36
+  "búho": "lechuza",      // #39
+  "buho": "lechuza",
+  "ciervo": "venado",     // #34
+  "buitre": "zamuro"      // #28
+};
+Object.entries(ANIMAL_SYNONYMS).forEach(([alias, standard]) => {
+  const standardNum = ANIMALITOS_REVERSE[standard];
+  if (standardNum) {
+    ANIMALITOS_REVERSE[alias] = standardNum;
+  }
+});
+
 // Inicializar cliente Gemini si la clave de API existe
 let ai = null;
 if (process.env.GEMINI_API_KEY) {
@@ -156,6 +175,14 @@ if (process.env.GEMINI_API_KEY) {
 const SYSTEM_PROMPT = `
 Eres el interpretador inteligente de una agencia de lotería de "Animalitos" en Venezuela.
 Tu tarea es analizar el mensaje de texto de un cliente y extraer las jugadas estructuradas en formato JSON.
+
+- Si el usuario usa sinónimos comunes, asócialos al animal estándar:
+  * "cerdo", "puerco", "marrano" -> "cochino" (20)
+  * "cabra" -> "chivo" (19)
+  * "serpiente", "vibora" -> "culebra" (36)
+  * "buho", "búho" -> "lechuza" (39)
+  * "ciervo" -> "venado" (34)
+  * "buitre" -> "zamuro" (28)
 
 La tabla oficial de animales y números es la siguiente:
 - 00: ballena
@@ -421,6 +448,25 @@ function fallbackParse(text, loteriasList = []) {
           const cleanName = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (cleanName !== name) {
             targetReverseMap[cleanName] = num;
+          }
+        });
+        
+        // Agregar sinónimos comunes al mapa inverso de la lotería
+        const sinonimos = {
+          "cabra": "chivo",
+          "cabrilla": "chivo",
+          "puerco": "cochino",
+          "cerdo": "cochino",
+          "serpiente": "culebra",
+          "buho": "lechuza",
+          "búho": "lechuza",
+          "ciervo": "venado",
+          "buitre": "zamuro"
+        };
+        Object.entries(sinonimos).forEach(([alias, standard]) => {
+          const standardNum = targetReverseMap[standard];
+          if (standardNum) {
+            targetReverseMap[alias] = standardNum;
           }
         });
       }

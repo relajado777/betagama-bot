@@ -28,6 +28,8 @@ const cache = {
   sorteos: [],
   retiros: [],
   loterias: [],
+  pagos: [],
+  cierres: [],
   configuracion: {},
   riesgos: {}
 };
@@ -178,7 +180,15 @@ async function inicializarCache() {
     cache.jugadas = [];
     jugadasSnapshot.forEach(doc => cache.jugadas.push({ id: doc.id, ...doc.data() }));
 
-    console.log(`✅ Caché inicializado con éxito: ${cache.clientes.length} clientes, ${cache.jugadas.length} jugadas, ${cache.loterias.length} loterías, ${cache.sorteos.length} sorteos, ${cache.retiros.length} retiros.`);
+    const pagosSnapshot = await db.collection('pagos').get();
+    cache.pagos = [];
+    pagosSnapshot.forEach(doc => cache.pagos.push({ id: doc.id, ...doc.data() }));
+
+    const cierresSnapshot = await db.collection('cierres').get();
+    cache.cierres = [];
+    cierresSnapshot.forEach(doc => cache.cierres.push({ id: doc.id, ...doc.data() }));
+
+    console.log(`✅ Caché inicializado con éxito: ${cache.clientes.length} clientes, ${cache.jugadas.length} jugadas, ${cache.loterias.length} loterías, ${cache.sorteos.length} sorteos, ${cache.retiros.length} retiros, ${cache.pagos.length} pagos, ${cache.cierres.length} cierres.`);
     guardarCacheEnDisco();
   } catch (err) {
     console.error('❌ Error al inicializar caché desde Firestore:', err);
@@ -197,10 +207,12 @@ async function inicializarCache() {
           cache.sorteos = backupData.sorteos || [];
           cache.retiros = backupData.retiros || [];
           cache.loterias = backupData.loterias || [];
+          cache.pagos = backupData.pagos || [];
+          cache.cierres = backupData.cierres || [];
           cache.configuracion = backupData.configuracion || {};
           cache.riesgos = backupData.riesgos || {};
           
-          console.log(`💾 Caché restaurado exitosamente desde backup en disco: ${cache.clientes.length} clientes, ${cache.jugadas.length} jugadas, ${cache.loterias.length} loterías.`);
+          console.log(`💾 Caché restaurado exitosamente desde backup en disco: ${cache.clientes.length} clientes, ${cache.jugadas.length} jugadas, ${cache.loterias.length} loterías, ${cache.cierres.length} cierres.`);
           cargadoDesdeBackup = true;
         }
       } catch (backupErr) {
@@ -1481,8 +1493,8 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       ? listaFrecuencias.filter(f => f.numero !== ultimoResultado)
       : listaFrecuencias;
 
-    // Los 3 animales más calientes (excluyendo el último ganador)
-    const calientes = listaFrecuenciasFiltradas.slice(0, 3).map(f => f.numero);
+    // Los 5 animales más calientes (excluyendo el último ganador)
+    const calientes = listaFrecuenciasFiltradas.slice(0, 5).map(f => f.numero);
 
     // Calcular atrasados (Opción 2): cantidad de sorteos transcurridos desde su última aparición
     const coldScores = {};
@@ -1503,8 +1515,8 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       atraso: score
     })).sort((a, b) => b.atraso - a.atraso);
 
-    // Los 3 animales más atrasados (fríos)
-    const atrasados = listaAtrasados.slice(0, 3).map(f => f.numero);
+    // Los 5 animales más atrasados (fríos)
+    const atrasados = listaAtrasados.slice(0, 5).map(f => f.numero);
 
     return {
       listaFrecuencias,
@@ -1795,13 +1807,13 @@ app.delete('/api/clientes/:telefono', async (req, res) => {
 // Registrar pago / abono de deuda de un cliente
 app.post('/api/clientes/:telefono/pago', async (req, res) => {
   const { telefono } = req.params;
-  const { monto } = req.body;
+  const { monto, metodo, referencia, comentario } = req.body;
   try {
     const clienteData = cache.clientes.find(c => c.telefono === telefono);
     if (!clienteData) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
-    const nuevaDeuda = Math.max(0, (clienteData.deuda || 0) - parseFloat(monto));
+    const nuevaDeuda = (clienteData.deuda || 0) - parseFloat(monto);
     clienteData.deuda = nuevaDeuda;
     await dbUpdate('clientes', clienteData.id, { deuda: nuevaDeuda });
     
@@ -1817,6 +1829,21 @@ app.post('/api/clientes/:telefono/pago', async (req, res) => {
         break;
       }
     }
+
+    // Registrar en la colección de pagos
+    const pagoId = 'pago_' + Math.random().toString(36).substring(2, 11);
+    const nuevoPago = {
+      id: pagoId,
+      clienteTelefono: telefono,
+      clienteNombre: clienteData.nombre,
+      monto: parseFloat(monto),
+      metodo: metodo || 'Pago Móvil',
+      tipo: 'ingreso',
+      referencia: referencia || '',
+      comentario: comentario || 'Abono de deuda',
+      fecha: new Date().toISOString()
+    };
+    await dbSet('pagos', pagoId, nuevoPago);
 
     res.json({ success: true, message: 'Pago registrado con éxito y deuda actualizada.' });
   } catch (error) {
@@ -2423,6 +2450,106 @@ app.post('/api/configuracion/loterias', async (req, res) => {
     }
     
     res.json({ success: true, message: 'Loterías configuradas actualizadas correctamente.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- ENDPOINTS DE CIERRES DE CAJA ---
+app.get('/api/cierres', (req, res) => {
+  res.json(cache.cierres || []);
+});
+
+app.post('/api/cierres', async (req, res) => {
+  const { fecha, ventas, premios, ingresos, egresos, diferencia, fondoCaja, comentario, retirarExcedente } = req.body;
+  try {
+    const cierreId = 'cierre_' + Math.random().toString(36).substring(2, 11);
+    const nuevoCierre = {
+      id: cierreId,
+      fecha: fecha || new Date().toLocaleDateString('sv', { timeZone: 'America/Caracas' }),
+      fechaEjecucion: new Date().toISOString(),
+      ventas: parseFloat(ventas) || 0,
+      premios: parseFloat(premios) || 0,
+      ingresos: parseFloat(ingresos) || 0,
+      egresos: parseFloat(egresos) || 0,
+      diferencia: parseFloat(diferencia) || 0,
+      fondoCaja: parseFloat(fondoCaja) || 0,
+      comentario: comentario || ''
+    };
+    await dbSet('cierres', cierreId, nuevoCierre);
+
+    // Si retirarExcedente es true y hay excedente en caja, registrar el retiro como un egreso automático en pagos
+    if (retirarExcedente) {
+      const excedente = (parseFloat(ingresos) - parseFloat(egresos)) - parseFloat(fondoCaja);
+      if (excedente > 0) {
+        const pagoId = 'pago_' + Math.random().toString(36).substring(2, 11);
+        const pagoAjuste = {
+          id: pagoId,
+          clienteTelefono: '',
+          clienteNombre: 'Cierre de Caja',
+          monto: excedente,
+          metodo: 'Efectivo',
+          tipo: 'egreso',
+          referencia: `CIERRE-${fecha}`,
+          comentario: `Retiro de excedente a bóveda (Fondo restante: Bs. ${fondoCaja})`,
+          fecha: new Date().toISOString()
+        };
+        await dbSet('pagos', pagoId, pagoAjuste);
+      }
+    }
+
+    res.json({ success: true, cierre: nuevoCierre });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- ENDPOINTS DE PAGOS (CONCILIACIÓN DE CAJA) ---
+app.get('/api/pagos', (req, res) => {
+  res.json(cache.pagos || []);
+});
+
+app.post('/api/pagos', async (req, res) => {
+  const { clienteTelefono, clienteNombre, monto, metodo, tipo, comentario, referencia, fecha } = req.body;
+  try {
+    const pagoId = 'pago_' + Math.random().toString(36).substring(2, 11);
+    const nuevoPago = {
+      id: pagoId,
+      clienteTelefono: clienteTelefono || '',
+      clienteNombre: clienteNombre || 'Operador',
+      monto: parseFloat(monto) || 0,
+      metodo: metodo || 'Pago Móvil',
+      tipo: tipo || 'ingreso', // 'ingreso' | 'egreso'
+      referencia: referencia || '',
+      comentario: comentario || '',
+      fecha: fecha || new Date().toISOString()
+    };
+    await dbSet('pagos', pagoId, nuevoPago);
+    res.json({ success: true, pago: nuevoPago });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/pagos/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pagoIndex = (cache.pagos || []).findIndex(p => p.id === id);
+    if (pagoIndex === -1) {
+      return res.status(404).json({ error: 'Pago no encontrado' });
+    }
+    const pago = cache.pagos[pagoIndex];
+    // Si estaba asociado a un cliente, revertir la deuda (sumarle el cobro de vuelta)
+    if (pago.clienteTelefono) {
+      const clienteData = cache.clientes.find(c => c.telefono === pago.clienteTelefono);
+      if (clienteData) {
+        const nuevaDeuda = (clienteData.deuda || 0) + pago.monto;
+        clienteData.deuda = nuevaDeuda;
+        await dbUpdate('clientes', clienteData.id, { deuda: nuevaDeuda });
+      }
+    }
+    await dbDelete('pagos', id);
+    res.json({ success: true, message: 'Pago eliminado con éxito.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
