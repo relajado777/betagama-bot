@@ -674,7 +674,7 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
       (existingPlay.clienteTelefono === (clienteData.telefono || telefonoReal) || existingPlay.clienteJid === telefono) &&
       existingPlay.loteria === lotName &&
       existingPlay.sorteoHora === j.sorteoHora &&
-      (existingPlay.sorteoFecha ? existingPlay.sorteoFecha === j.sorteoFecha : existingPlay.fecha.split('T')[0] === j.sorteoFecha) &&
+      (existingPlay.sorteoFecha ? existingPlay.sorteoFecha === j.sorteoFecha : (existingPlay.fecha && typeof existingPlay.fecha === 'string' && existingPlay.fecha.split('T')[0] === j.sorteoFecha)) &&
       existingPlay.estado !== 'anulada' &&
       existingPlay.valor.includes(`(#${animalNum})`)
     );
@@ -708,7 +708,7 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
     const matchingJugadasColectivo = cache.jugadas.filter(existingPlay =>
       existingPlay.loteria === lotName &&
       existingPlay.sorteoHora === j.sorteoHora &&
-      (existingPlay.sorteoFecha ? existingPlay.sorteoFecha === j.sorteoFecha : existingPlay.fecha.split('T')[0] === j.sorteoFecha) &&
+      (existingPlay.sorteoFecha ? existingPlay.sorteoFecha === j.sorteoFecha : (existingPlay.fecha && typeof existingPlay.fecha === 'string' && existingPlay.fecha.split('T')[0] === j.sorteoFecha)) &&
       existingPlay.estado !== 'anulada' &&
       existingPlay.valor.includes(`(#${animalNum})`)
     );
@@ -2157,7 +2157,7 @@ async function registrarResultadoSorteoInternal(loteria, hora, resultado, fecha)
     const matchingJugadas = cache.jugadas.filter(j => 
       j.loteria === loteria && 
       j.sorteoHora === hora && 
-      (j.sorteoFecha ? j.sorteoFecha === fecha : j.fecha.split('T')[0] === fecha)
+      (j.sorteoFecha ? j.sorteoFecha === fecha : (j.fecha && typeof j.fecha === 'string' && j.fecha.split('T')[0] === fecha))
     );
 
     let ganadoresCount = 0;
