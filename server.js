@@ -9,22 +9,39 @@ const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
 
+const formatArg = (a) => {
+  if (a instanceof Error) {
+    return a.stack || a.message;
+  }
+  if (typeof a === 'object' && a !== null) {
+    try {
+      // Si tiene stack o message (ej. eventos de error que no heredan de Error pero tienen propiedades similares)
+      if (a.stack) return String(a.stack);
+      if (a.message) return String(a.message);
+      return JSON.stringify(a);
+    } catch (e) {
+      return String(a);
+    }
+  }
+  return String(a);
+};
+
 console.log = (...args) => {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  const msg = args.map(formatArg).join(' ');
   consoleLogs.push(`[LOG] ${new Date().toISOString()} - ${msg}`);
   if (consoleLogs.length > 500) consoleLogs.shift();
   originalLog(...args);
 };
 
 console.error = (...args) => {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  const msg = args.map(formatArg).join(' ');
   consoleLogs.push(`[ERROR] ${new Date().toISOString()} - ${msg}`);
   if (consoleLogs.length > 500) consoleLogs.shift();
   originalError(...args);
 };
 
 console.warn = (...args) => {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  const msg = args.map(formatArg).join(' ');
   consoleLogs.push(`[WARN] ${new Date().toISOString()} - ${msg}`);
   if (consoleLogs.length > 500) consoleLogs.shift();
   originalWarn(...args);
