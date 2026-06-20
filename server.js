@@ -565,6 +565,9 @@ client.on('disconnected', (reason) => {
 
 // Función para procesar y validar límites, riesgos y horarios de jugadas
 async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, session, clienteData, nombreCliente) {
+  const telefono = message.from;
+  const telefonoReal = clienteData ? clienteData.telefono : telefono.split('@')[0];
+
   let limiteMax = 10000;
   if (cache.configuracion && cache.configuracion.limiteMaxJugada !== undefined) {
     limiteMax = cache.configuracion.limiteMaxJugada;
