@@ -289,7 +289,8 @@ function findAndReplaceHours(text) {
 
   // Define regexes
   const regexP1 = /\b(\d{1,2}(?:\s*,\s*\d{1,2})*(?:\s*(?:y|o)\s*\d{1,2})?)\s*(?:de la\s*)?(tarde|manana|am|pm|a\.m\.|p\.m\.)\b/gi;
-  const regexP2 = /\b(?:sorteo[s]?\s+(?:de\s+|a\s+)?las|para\s+las|de\s+las|a\s+las|las)\s+(\d{1,2}(?:\s*,\s*\d{1,2})*(?:\s*(?:y|o)\s*\d{1,2})?)\b/gi;
+  // Improved regexP2 to match "sorteos 3,4 y 5" or "sorteo 3" or with colons
+  const regexP2 = /\b(?:sorteo[s]?(?:\s+(?:de|a|las))*\s*(?::)?\s+|para\s+las\s+|de\s+las\s+|a\s+las\s+|las\s+)(\d{1,2}(?:\s*,\s*\d{1,2})*(?:\s*(?:y|o)\s*\d{1,2})?)\b/gi;
   const regexP3 = /\b(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)\b/gi;
 
   function scan(regex, type) {
@@ -363,7 +364,6 @@ function limpiarNombreLoteriaDeTexto(texto, lotName) {
   } else if (normLot.includes("granjita") || normLot.includes("granja")) {
     patterns = [/\b(para|en|de|a)?\s*la\s*granjita\b/gi, /\b(para|en|de|a)?\s*granjita\b/gi, /\b(para|en|de|a)?\s*granja\b/gi];
   } else if (normLot.includes("guacharo")) {
-    // Solo remover si va acompañado de preposición o la palabra "activo" para no pisar el animal 75 "guacharo"
     patterns = [
       /\b(para|en|de|a|sorteo|loteria)\s+guacharo\s*activo\b/gi, 
       /\b(para|en|de|a|sorteo|loteria)\s+guacharo\b/gi,
@@ -383,51 +383,30 @@ function limpiarNombreLoteriaDeTexto(texto, lotName) {
 function fallbackParse(text, loteriasList = []) {
   let { cleanText, hoursMap } = findAndReplaceHours(text);
 
-  // Buscar lotería por defecto en el texto completo
-  let defaultLoteria = null;
-  if (loteriasList && loteriasList.length > 0) {
-    for (const lot of loteriasList) {
-      const lotNameClean = lot.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const lotIdClean = lot.id.toLowerCase().replace(/_/g, " ");
-      
-      const isLotto = lotNameClean.includes("lotto") && (cleanText.includes("lotto") || cleanText.includes("activo"));
-      const isGranja = lotNameClean.includes("granjita") && (cleanText.includes("granjita") || cleanText.includes("granja"));
-      const isGuacharo = lotNameClean.includes("guacharo") && cleanText.includes("guacharo");
-      
-      if (cleanText.includes(lotNameClean) || (lotIdClean && cleanText.includes(lotIdClean)) || isLotto || isGranja || isGuacharo) {
-        defaultLoteria = lot.nombre.toLowerCase();
-        break;
-      }
-    }
-  } else {
-    if (cleanText.includes("lotto") || cleanText.includes("activo")) {
-      defaultLoteria = "lotto activo";
-    } else if (cleanText.includes("granjita") || cleanText.includes("la granjita") || cleanText.includes("granja")) {
-      defaultLoteria = "la granjita";
-    } else if (cleanText.includes("guacharo")) {
-      defaultLoteria = "guacharo";
-    }
-  }
-
-  const jugadas = [];
-
-  const detectarLoteriaEnTexto = (subtext) => {
+  // Helper to detect ALL matching lotteries in a string
+  const detectarLoteriasEnTexto = (subtext) => {
+    const matches = [];
     if (loteriasList && loteriasList.length > 0) {
       for (const lot of loteriasList) {
         const lotNameClean = lot.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const lotIdClean = lot.id.toLowerCase().replace(/_/g, " ");
+        const lotIdClean = lot.id.toLowerCase().replace(/_/g, " ").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         
-        const isLotto = lotNameClean.includes("lotto") && (subtext.includes("lotto") || subtext.includes("activo"));
+        const isLotto = lotNameClean.includes("lotto") && (subtext.includes("lotto") || subtext.includes("activo") || subtext.includes("loto"));
         const isGranja = lotNameClean.includes("granjita") && (subtext.includes("granjita") || subtext.includes("granja"));
         const isGuacharo = lotNameClean.includes("guacharo") && subtext.includes("guacharo");
         
         if (subtext.includes(lotNameClean) || (lotIdClean && subtext.includes(lotIdClean)) || isLotto || isGranja || isGuacharo) {
-          return lot.nombre.toLowerCase();
+          matches.push(lot.nombre.toLowerCase());
         }
       }
     }
-    return defaultLoteria;
+    return matches;
   };
+
+  // Find default lotteries globally
+  const defaultLoterias = detectarLoteriasEnTexto(cleanText);
+
+  const jugadas = [];
 
   const obtenerMapasAnimales = (lotName) => {
     let targetAnimalMap = ANIMALITOS_MAP;
@@ -450,25 +429,6 @@ function fallbackParse(text, loteriasList = []) {
             targetReverseMap[cleanName] = num;
           }
         });
-        
-        // Agregar sinónimos comunes al mapa inverso de la lotería
-        const sinonimos = {
-          "cabra": "chivo",
-          "cabrilla": "chivo",
-          "puerco": "cochino",
-          "cerdo": "cochino",
-          "serpiente": "culebra",
-          "buho": "lechuza",
-          "búho": "lechuza",
-          "ciervo": "venado",
-          "buitre": "zamuro"
-        };
-        Object.entries(sinonimos).forEach(([alias, standard]) => {
-          const standardNum = targetReverseMap[standard];
-          if (standardNum) {
-            targetReverseMap[alias] = standardNum;
-          }
-        });
       }
     }
     return { animalMap: targetAnimalMap, reverseMap: targetReverseMap };
@@ -483,8 +443,8 @@ function fallbackParse(text, loteriasList = []) {
     return null;
   };
 
-  // 1. Shorthand x/por/star
-  const regexShorthand = /\b((?:[a-z\s\.,\-\/_]+|\b\d{1,2}\b|__hora_\d+__)+?)\s*(?:[x\*]|\bpor\b)\s*(\d+)(?:\s*(?:[a-z0-9_]+|__hora_\d+__))*/gi;
+  // Improved regexShorthand with restricted suffix matching to prevent eating subsequent plays
+  const regexShorthand = /\b((?:[a-z\s\.,\-\/_]+|\b\d{1,2}\b|__hora_\d+__)+?)\s*(?:[x\*]|\bpor\b)\s*(\d+)(?:\s*(?:para|en|de|la|el|lotto|activo|granjita|granja|guacharo|bs|bolivares|__hora_\d+__))*/gi;
   let matchX;
   const processedSegments = [];
 
@@ -496,38 +456,50 @@ function fallbackParse(text, loteriasList = []) {
     if (monto > 0) {
       processedSegments.push({ start: matchX.index, end: matchX.index + fullMatchStr.length });
 
-      const loteria = detectarLoteriaEnTexto(fullMatchStr) || detectarLoteriaEnTexto(lhs);
-      const horas = extraerHorasDeTexto(fullMatchStr) || extraerHorasDeTexto(lhs);
-      const { animalMap, reverseMap } = obtenerMapasAnimales(loteria);
+      // Detect all matching lotteries for this segment
+      let loterias = detectarLoteriasEnTexto(fullMatchStr);
+      if (loterias.length === 0) loterias = detectarLoteriasEnTexto(lhs);
+      if (loterias.length === 0) loterias = [...defaultLoterias];
+      if (loterias.length === 0) loterias = [null];
 
-      const lhsLimpio = limpiarNombreLoteriaDeTexto(lhs, loteria);
-      const elementos = lhsLimpio.split(/[\s\.,\-]+|\by\b|\bo\b/gi);
-      for (const elem of elementos) {
-        const limpio = elem.trim();
-        if (!limpio || limpio.startsWith('__hora_')) continue;
+      // Get hours with global fallback
+      let horas = extraerHorasDeTexto(fullMatchStr) || extraerHorasDeTexto(lhs);
+      if (!horas && hoursMap.length > 0) {
+        horas = hoursMap[0];
+      }
 
-        let animal = null;
-        let numero = null;
+      for (const loteria of loterias) {
+        const { animalMap, reverseMap } = obtenerMapasAnimales(loteria);
+        const lhsLimpio = limpiarNombreLoteriaDeTexto(lhs, loteria);
+        const elementos = lhsLimpio.split(/[\s\.,\-]+|\by\b|\bo\b/gi);
+        
+        for (const elem of elementos) {
+          const limpio = elem.trim();
+          if (!limpio || limpio.startsWith('__hora_')) continue;
 
-        if (/^\d+$/.test(limpio)) {
-          let padded = limpio.padStart(2, '0');
-          if (limpio === "0" || limpio === "00") padded = limpio;
-          if (animalMap[padded]) {
-            numero = padded;
-            animal = animalMap[padded];
-          }
-        } else if (reverseMap[limpio]) {
-          animal = limpio;
-          numero = reverseMap[limpio];
-        }
+          let animal = null;
+          let numero = null;
 
-        if (animal && numero) {
-          if (horas && horas.length > 0) {
-            for (const hr of horas) {
-              jugadas.push({ animal, numero, monto, loteria, sorteoHora: hr });
+          if (/^\d+$/.test(limpio)) {
+            let padded = limpio.padStart(2, '0');
+            if (limpio === "0" || limpio === "00") padded = limpio;
+            if (animalMap[padded]) {
+              numero = padded;
+              animal = animalMap[padded];
             }
-          } else {
-            jugadas.push({ animal, numero, monto, loteria });
+          } else if (reverseMap[limpio]) {
+            animal = limpio;
+            numero = reverseMap[limpio];
+          }
+
+          if (animal && numero) {
+            if (horas && horas.length > 0) {
+              for (const hr of horas) {
+                jugadas.push({ animal, numero, monto, loteria, sorteoHora: hr });
+              }
+            } else {
+              jugadas.push({ animal, numero, monto, loteria });
+            }
           }
         }
       }
@@ -546,49 +518,57 @@ function fallbackParse(text, loteriasList = []) {
     parte = parte.trim();
     if (!parte) continue;
 
-    const loteria = detectarLoteriaEnTexto(parte);
-    const horas = extraerHorasDeTexto(parte);
-    const { reverseMap } = obtenerMapasAnimales(loteria);
+    let loterias = detectarLoteriasEnTexto(parte);
+    if (loterias.length === 0) loterias = [...defaultLoterias];
+    if (loterias.length === 0) loterias = [null];
 
-    const parteLimpia = limpiarNombreLoteriaDeTexto(parte, loteria);
-    const animalNames = Object.keys(reverseMap).join("|");
-    const regexEstandar = new RegExp(`\\b(${animalNames}|\\d{1,2})\\b\\s*(?:con|de|a|por|)?\\s*(?:__hora_\\d+__\\s*)?\\b(\\d+)\\b`, "gi");
-    
-    let matchEst;
-    while ((matchEst = regexEstandar.exec(parteLimpia)) !== null) {
-      const target = matchEst[1];
-      const monto = parseInt(matchEst[2], 10);
+    let horas = extraerHorasDeTexto(parte);
+    if (!horas && hoursMap.length > 0) {
+      horas = hoursMap[0];
+    }
+
+    for (const loteria of loterias) {
+      const { reverseMap } = obtenerMapasAnimales(loteria);
+      const parteLimpia = limpiarNombreLoteriaDeTexto(parte, loteria);
+      const animalNames = Object.keys(reverseMap).join("|");
+      const regexEstandar = new RegExp(`\\b(${animalNames}|\\d{1,2})\\b\\s*(?:con|de|a|por|)?\\s*(?:__hora_\\d+__\\s*)?\\b(\\d+)\\b`, "gi");
       
-      let animal = null;
-      let numero = null;
-      const { animalMap } = obtenerMapasAnimales(loteria);
+      let matchEst;
+      while ((matchEst = regexEstandar.exec(parteLimpia)) !== null) {
+        const target = matchEst[1];
+        const monto = parseInt(matchEst[2], 10);
+        
+        let animal = null;
+        let numero = null;
+        const { animalMap } = obtenerMapasAnimales(loteria);
 
-      if (/^\d+$/.test(target)) {
-        let padded = target.padStart(2, '0');
-        if (target === "0" || target === "00") padded = target;
-        if (animalMap[padded]) {
-          numero = padded;
-          animal = animalMap[padded];
-        }
-      } else if (reverseMap[target]) {
-        animal = target;
-        numero = reverseMap[target];
-      }
-
-      if (animal && numero && monto > 0) {
-        let localHoras = horas;
-        const matchLocalPlaceholder = matchEst[0].match(/__hora_(\d+)__/i);
-        if (matchLocalPlaceholder) {
-          const idx = parseInt(matchLocalPlaceholder[1], 10);
-          localHoras = hoursMap[idx];
-        }
-
-        if (localHoras && localHoras.length > 0) {
-          for (const hr of localHoras) {
-            jugadas.push({ animal, numero, monto, loteria, sorteoHora: hr });
+        if (/^\d+$/.test(target)) {
+          let padded = target.padStart(2, '0');
+          if (target === "0" || target === "00") padded = target;
+          if (animalMap[padded]) {
+            numero = padded;
+            animal = animalMap[padded];
           }
-        } else {
-          jugadas.push({ animal, numero, monto, loteria });
+        } else if (reverseMap[target]) {
+          animal = target;
+          numero = reverseMap[target];
+        }
+
+        if (animal && numero && monto > 0) {
+          let localHoras = horas;
+          const matchLocalPlaceholder = matchEst[0].match(/__hora_(\d+)__/i);
+          if (matchLocalPlaceholder) {
+            const idx = parseInt(matchLocalPlaceholder[1], 10);
+            localHoras = hoursMap[idx];
+          }
+
+          if (localHoras && localHoras.length > 0) {
+            for (const hr of localHoras) {
+              jugadas.push({ animal, numero, monto, loteria, sorteoHora: hr });
+            }
+          } else {
+            jugadas.push({ animal, numero, monto, loteria });
+          }
         }
       }
     }
