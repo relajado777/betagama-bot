@@ -499,9 +499,6 @@ async function notificarEstadoJugada(jugadaId, estado, metodoPago = '', motivoAn
   }
 }
 
-// Inicializar cliente de WhatsApp
-console.log('🤖 Inicializando cliente de WhatsApp...');
-
 // Detectar automáticamente el ejecutable de Chrome/Chromium
 // En la nube (Linux) usa el Chromium del sistema; en Windows usa Chrome local
 const isCloud = process.platform === 'linux';
@@ -511,8 +508,6 @@ const chromiumArgs = [
   '--disable-dev-shm-usage',
   '--disable-accelerated-2d-canvas',
   '--no-first-run',
-  '--no-zygote',
-  '--single-process',
   '--disable-gpu'
 ];
 
@@ -526,42 +521,91 @@ const puppeteerConfig = isCloud
       args: chromiumArgs
     };
 
-const client = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: './.wwebjs_auth'
-  }),
-  puppeteer: puppeteerConfig
-});
-
+let client = null;
 let botState = 'disconnected';
 let botPaused = false; // Si es true, el bot ignora todos los mensajes entrantes
 let latestQr = null; // Guardar el último código QR generado para mostrarlo en el panel
 
-client.on('qr', (qr) => {
-  botState = 'qr';
-  latestQr = qr;
-  console.log('⚠️ SE REQUIERE ESCANEAR EL CÓDIGO QR PARA INICIAR EL BOT:');
-  qrcodeTerminal.generate(qr, { small: true });
-  console.log('📷 Por favor, escanea el código QR de arriba con la aplicación de WhatsApp en tu teléfono.');
-});
+function limpiarDirectorioAutenticacion() {
+  const authPath = path.resolve('./.wwebjs_auth');
+  if (fs.existsSync(authPath)) {
+    try {
+      const files = fs.readdirSync(authPath);
+      for (const file of files) {
+        const curPath = path.join(authPath, file);
+        fs.rmSync(curPath, { recursive: true, force: true });
+      }
+      console.log('🗑️ Contenido de .wwebjs_auth eliminado con éxito.');
+    } catch (rmErr) {
+      console.warn(`⚠️ No se pudo limpiar la carpeta de autenticación:`, rmErr.message);
+    }
+  }
+}
 
-client.on('ready', () => {
-  botState = 'connected';
-  latestQr = null;
-  console.log('🚀 ¡El Bot de WhatsApp está conectado y listo para procesar mensajes!');
-});
+function inicializarClienteWhatsApp() {
+  console.log('🤖 Inicializando cliente de WhatsApp...');
+  
+  // Borrar el archivo de bloqueo de Chromium para evitar el error "profile in use"
+  deleteSingletonLocks(path.join(process.cwd(), '.wwebjs_auth'));
 
-client.on('auth_failure', (msg) => {
-  botState = 'auth_failure';
-  latestQr = null;
-  console.error('❌ Fallo de autenticación en WhatsApp:', msg);
-});
+  client = new Client({
+    authStrategy: new LocalAuth({
+      dataPath: './.wwebjs_auth'
+    }),
+    puppeteer: puppeteerConfig
+  });
 
-client.on('disconnected', (reason) => {
-  botState = 'disconnected';
-  latestQr = null;
-  console.log('❌ El Bot de WhatsApp se ha desconectado:', reason);
-});
+  client.on('qr', (qr) => {
+    botState = 'qr';
+    latestQr = qr;
+    console.log('⚠️ SE REQUIERE ESCANEAR EL CÓDIGO QR PARA INICIAR EL BOT:');
+    qrcodeTerminal.generate(qr, { small: true });
+    console.log('📷 Por favor, escanea el código QR de arriba con la aplicación de WhatsApp en tu teléfono.');
+  });
+
+  client.on('ready', () => {
+    botState = 'connected';
+    latestQr = null;
+    console.log('🚀 ¡El Bot de WhatsApp está conectado y listo para procesar mensajes!');
+  });
+
+  client.on('auth_failure', async (msg) => {
+    botState = 'auth_failure';
+    latestQr = null;
+    console.error('❌ Fallo de autenticación en WhatsApp:', msg);
+    console.log('🔄 Limpiando sesión corrupta e intentando re-inicializar en 10 segundos...');
+    limpiarDirectorioAutenticacion();
+    setTimeout(() => {
+      inicializarClienteWhatsApp();
+    }, 10000);
+  });
+
+  client.on('disconnected', async (reason) => {
+    botState = 'disconnected';
+    latestQr = null;
+    console.log('❌ El Bot de WhatsApp se ha desconectado:', reason);
+    try {
+      await client.destroy();
+    } catch (destroyErr) {
+      console.warn('Advertencia al destruir cliente desconectado:', destroyErr.message);
+    }
+    console.log('🔄 Intentando reconexión en 10 segundos...');
+    setTimeout(() => {
+      inicializarClienteWhatsApp();
+    }, 10000);
+  });
+
+  client.on('message', handleWhatsAppMessage);
+
+  client.initialize().catch(err => {
+    console.error('❌ Error en client.initialize():', err.message);
+    console.log('🔄 Reintentando inicialización en 10 segundos...');
+    setTimeout(() => {
+      inicializarClienteWhatsApp();
+    }, 10000);
+  });
+}
+
 
 // Función para procesar y validar límites, riesgos y horarios de jugadas
 async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, session, clienteData, nombreCliente) {
@@ -803,7 +847,7 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
 }
 
 // Manejo del Flujo del Bot
-client.on('message', async (message) => {
+async function handleWhatsAppMessage(message) {
   try {
     const telefono = message.from; // Identificador único (ej: 584121234567@c.us)
     const texto = (message.body || '').trim();
@@ -1441,7 +1485,7 @@ client.on('message', async (message) => {
   } catch (error) {
     console.error('❌ Error en flujo del mensaje de WhatsApp:', error);
   }
-});
+}
 
 // Función utilitaria para limpiar acentos y mayúsculas
 function cleanText(text) {
@@ -1468,14 +1512,7 @@ const deleteSingletonLocks = (dir) => {
   }
 };
 
-deleteSingletonLocks(path.join(process.cwd(), '.wwebjs_auth'));
-
-// Inicializar el cliente de WhatsApp
-try {
-  client.initialize();
-} catch (initErr) {
-  console.error('❌ Error al inicializar el cliente de WhatsApp:', initErr.message);
-}
+inicializarClienteWhatsApp();
 
 async function obtenerEstadisticasRiesgo(loteriaId) {
   try {
@@ -1647,29 +1684,15 @@ app.post('/api/bot/reset', async (req, res) => {
     // Dar 1.5 segundos para que Puppeteer se cierre por completo y libere los archivos
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Borrar el contenido de la carpeta de autenticación (sin borrar la carpeta en sí porque es un volumen montado)
-    const authPath = path.resolve('./.wwebjs_auth');
-    if (fs.existsSync(authPath)) {
-      const files = fs.readdirSync(authPath);
-      for (const file of files) {
-        const curPath = path.join(authPath, file);
-        try {
-          fs.rmSync(curPath, { recursive: true, force: true });
-        } catch (rmErr) {
-          console.warn(`No se pudo borrar el archivo/directorio ${file}:`, rmErr.message);
-        }
-      }
-      console.log('🗑️ Contenido de .wwebjs_auth eliminado con éxito.');
-    }
+    // Borrar el contenido de la carpeta de autenticación
+    limpiarDirectorioAutenticacion();
     
     // Reiniciar el estado
     botState = 'disconnected';
     latestQr = null;
     
     // Inicializar el cliente de nuevo en segundo plano
-    client.initialize().catch(err => {
-      console.error('Error al re-inicializar el cliente:', err.message);
-    });
+    inicializarClienteWhatsApp();
     
     res.json({ success: true, message: 'Sesión de WhatsApp reseteada. Generando nuevo código QR...' });
   } catch (error) {
