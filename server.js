@@ -760,6 +760,67 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
       }
     }
 
+    // --- Heurística 4: Detección de Inflow (Sharp Money / Minuto 50) ---
+    // Si faltan menos de 10 minutos para el sorteo, y el volumen es inusualmente alto, bloqueamos por seguridad.
+    const hoyCaracasStr = new Date().toLocaleDateString('sv', { timeZone: 'America/Caracas' });
+    if (j.sorteoFecha === hoyCaracasStr) {
+      const parseTimeToMinutesForSharp = (h) => {
+        if (!h) return 0;
+        const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+        if (!matches) return 0;
+        let hr = parseInt(matches[1], 10);
+        const min = parseInt(matches[2], 10);
+        const meridiano = matches[3].toLowerCase();
+        if (meridiano === 'pm' && hr < 12) hr += 12;
+        if (meridiano === 'am' && hr === 12) hr = 0;
+        return hr * 60 + min;
+      };
+
+      const caracasTimeStr = new Date().toLocaleTimeString('en-US', { timeZone: 'America/Caracas', hour12: false });
+      const [horaActual, minActual] = caracasTimeStr.split(':').map(Number);
+      const minutosAhora = horaActual * 60 + minActual;
+      const minutosSorteo = parseTimeToMinutesForSharp(j.sorteoHora);
+      const minutosFaltantes = minutosSorteo - minutosAhora;
+
+      // Si estamos dentro de los 10 minutos previos al sorteo
+      if (minutosFaltantes >= 0 && minutosFaltantes <= 10) {
+        const playsForSorteo = cache.jugadas.filter(p =>
+          p.loteria === lotName &&
+          p.sorteoHora === j.sorteoHora &&
+          (p.sorteoFecha ? p.sorteoFecha === j.sorteoFecha : (p.fecha && typeof p.fecha === 'string' && p.fecha.split('T')[0] === j.sorteoFecha)) &&
+          p.estado !== 'anulada'
+        );
+
+        const totalApostadoAnimal = playsForSorteo
+          .filter(p => p.valor.includes(`(#${animalNum})`))
+          .reduce((sum, p) => sum + p.monto, 0) + (montosValidadosEnLote[loteKey] || 0);
+
+        const totalApostadoOtros = playsForSorteo
+          .filter(p => !p.valor.includes(`(#${animalNum})`))
+          .reduce((sum, p) => sum + p.monto, 0);
+
+        const avgOthers = totalApostadoOtros / 36;
+
+        // Si el total apostado en este animal supera Bs. 15,000 Y es 3 veces mayor al promedio de los otros
+        if (totalApostadoAnimal > 15000 && totalApostadoAnimal > avgOthers * 3) {
+          console.warn(`⚠️ [Sharp Money] Anomalía de volumen detectada en ${lotName} - ${j.sorteoHora} para animal #${animalNum}. Monto: Bs. ${totalApostadoAnimal}, Promedio otros: Bs. ${avgOthers.toFixed(2)}`);
+          session.estado = 'idle';
+          session.jugadasPendientes = [];
+          const animalCapitalized = j.animal.toUpperCase();
+          
+          session.ultimaJugadaRechazada = {
+            jugada: j,
+            limiteDisponible: 0,
+            indexRechazado: i,
+            todasLasJugadas: jugadas
+          };
+
+          await message.reply(`El ${animalCapitalized} (#${animalNum}) no está disponible por protección contra volatilidad de última hora (Sharp Money).`);
+          return false;
+        }
+      }
+    }
+
     // 1. Validación de Límite Individual Acumulativo
     const matchingJugadasCliente = cache.jugadas.filter(existingPlay =>
       (existingPlay.clienteTelefono === (clienteData.telefono || telefonoReal) || existingPlay.clienteJid === telefono) &&
