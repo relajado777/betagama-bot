@@ -1571,12 +1571,15 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       return parseTimeToMinutes(b.hora) - parseTimeToMinutes(a.hora);
     });
 
+    // Limitar al rango de los últimos 120 sorteos para el análisis de riesgo
+    const last120Sorteos = sortedByRecency.slice(0, 120);
+
     const freq = {};
     for (const num of Object.keys(targetAnimalMap)) {
       freq[num] = 0;
     }
 
-    rawSorteos.forEach(s => {
+    last120Sorteos.forEach(s => {
       const num = obtenerCodigoResultado(s.resultado);
       if (num && freq[num] !== undefined) {
         freq[num]++;
@@ -1591,8 +1594,8 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
 
     // Obtener el último ganador del sorteo más reciente para excluirlo de la lista caliente (Opción 1)
     let ultimoResultado = null;
-    if (sortedByRecency.length > 0) {
-      ultimoResultado = obtenerCodigoResultado(sortedByRecency[0].resultado);
+    if (last120Sorteos.length > 0) {
+      ultimoResultado = obtenerCodigoResultado(last120Sorteos[0].resultado);
     }
 
     const listaFrecuenciasFiltradas = ultimoResultado 
@@ -1608,7 +1611,7 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       coldScores[num] = 9999; // Por defecto si nunca ha salido en el rango
     }
 
-    sortedByRecency.forEach((s, idx) => {
+    last120Sorteos.forEach((s, idx) => {
       const code = obtenerCodigoResultado(s.resultado);
       if (code && coldScores[code] === 9999) {
         coldScores[code] = idx;
