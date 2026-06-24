@@ -794,7 +794,16 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
     }
 
     // 2. Validación de Límite Colectivo Acumulativo (Cupo General de la Agencia por Animal para este Sorteo)
-    const limiteColectivo = limiteIndividual * factorColectivo;
+    let factorColectivoAplicado = factorColectivo;
+    const cuantico = cache.riesgos.cuantico || {};
+    const alertasBloqueo = cuantico.alerta_bloqueo_preventivo || [];
+    
+    if (alertasBloqueo.includes(parseInt(animalNum, 10)) || alertasBloqueo.includes(animalNum.toString())) {
+      factorColectivoAplicado = 1.1;
+      console.log(`🚨 [Riesgo Cuántico] Colapsando cupo colectivo para animal #${animalNum} a 1.1x por alerta de bloqueo preventivo.`);
+    }
+
+    const limiteColectivo = limiteIndividual * factorColectivoAplicado;
 
     const matchingJugadasColectivo = cache.jugadas.filter(existingPlay =>
       existingPlay.loteria === lotName &&
@@ -1514,6 +1523,398 @@ const deleteSingletonLocks = (dir) => {
 
 inicializarClienteWhatsApp();
 
+// Memoria volátil del motor de riesgo cuántico (Stop Loss)
+let memoriaRiesgoCuantico = {
+  regimenActivo: "NINGUNO",
+  fallosConsecutivos: 0,
+  ultimoSorteoId: null,
+  confluenciasPrevias: []
+};
+
+// Algoritmo Cuántico/Prop Trader de Detección de Regímenes
+async function ejecutarAlgoritmoCuantico(loteriaId) {
+  try {
+    let rawSorteos = [...cache.sorteos];
+    let targetAnimalMap = ANIMALITOS_MAP;
+    
+    if (loteriaId) {
+      const normInput = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+      rawSorteos = rawSorteos.filter(s => {
+        const normSorteo = s.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+        return normSorteo === normInput || 
+               (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
+               (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
+               (normSorteo === 'granja' && normInput === 'la_granjita') ||
+               (normSorteo === 'la_granjita' && normInput === 'granja') ||
+               (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
+               (normSorteo === 'guacharo' && normInput === 'guacharo_activo');
+      });
+
+      const matchedLot = cache.loterias.find(l => {
+        const normName = l.nombre.toLowerCase().trim().replace(/\s+/g, '_');
+        const normId = l.id.toLowerCase().trim().replace(/\s+/g, '_');
+        return normName === normInput || normId === normInput ||
+               (normName === 'lotto_activo' && normInput === 'lotto') ||
+               (normName === 'la_granjita' && normInput === 'granja') ||
+               (normName === 'guacharo' && normInput === 'guacharo_activo');
+      });
+      if (matchedLot && matchedLot.animales && Object.keys(matchedLot.animales).length > 0) {
+        targetAnimalMap = matchedLot.animales;
+      }
+    }
+
+    const parseTimeToMinutes = (h) => {
+      const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+      if (!matches) return 0;
+      let hr = parseInt(matches[1], 10);
+      const min = parseInt(matches[2], 10);
+      const meridiano = matches[3].toLowerCase();
+      if (meridiano === 'pm' && hr < 12) hr += 12;
+      if (meridiano === 'am' && hr === 12) hr = 0;
+      return hr * 60 + min;
+    };
+
+    const obtenerCodigoResultado = (resStr) => {
+      if (!resStr) return '';
+      const match = resStr.match(/\(#(\d+)\)/);
+      if (match) return match[1];
+      const matchPlain = resStr.match(/#(\d+)/);
+      if (matchPlain) return matchPlain[1];
+      return resStr.trim().replace(/[^\d]/g, '');
+    };
+
+    const sortedByRecency = [...rawSorteos].sort((a, b) => {
+      const dateCompare = b.fecha.localeCompare(a.fecha);
+      if (dateCompare !== 0) return dateCompare;
+      return parseTimeToMinutes(b.hora) - parseTimeToMinutes(a.hora);
+    });
+
+    if (sortedByRecency.length < 5) {
+      return {
+        regimen_detectado: "NINGUNO",
+        coeficiente_confianza_patron: 0.0,
+        cluster_dinamico_activo: { nombre_familia: "Ninguno", miembros_activos_hoy: [] },
+        arrayRegimeConfluence: [],
+        alerta_bloqueo_preventivo: [],
+        vida_util_estimada_sorteos: 0
+      };
+    }
+
+    const lastDraw = sortedByRecency[0];
+    const lastDrawCode = obtenerCodigoResultado(lastDraw.resultado);
+
+    // --- 1. HEURÍSTICA: RÉGIMEN ARITMÉTICO DE DELTA MÓVIL ---
+    let deltaHits = 0;
+    for (let i = 0; i < Math.min(10, sortedByRecency.length - 2); i++) {
+      const current = parseInt(obtenerCodigoResultado(sortedByRecency[i].resultado), 10);
+      const p1 = parseInt(obtenerCodigoResultado(sortedByRecency[i+1].resultado), 10);
+      const p2 = parseInt(obtenerCodigoResultado(sortedByRecency[i+2].resultado), 10);
+      if (!isNaN(current) && !isNaN(p1) && !isNaN(p2)) {
+        const diff = Math.abs(p1 - p2);
+        const sum = (p1 + p2) % 38;
+        const compl = Math.abs(38 - sum);
+        if (current === diff || current === sum || current === compl) {
+          deltaHits++;
+        }
+      }
+    }
+
+    // --- 2. HEURÍSTICA: DOBLES ---
+    let doblesHits = 0;
+    const last6Codes = sortedByRecency.slice(0, 6).map(s => obtenerCodigoResultado(s.resultado)).filter(Boolean);
+    const codeCounts = {};
+    last6Codes.forEach(c => { codeCounts[c] = (codeCounts[c] || 0) + 1; });
+    const hasRepeat = Object.values(codeCounts).some(cnt => cnt >= 2);
+
+    // --- 3. HEURÍSTICA: CLÚSTERES DINÁMICOS Y EXPANSIVOS ---
+    // A. Rueda Vecindad
+    const rueda = ["00", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36"];
+    const wheelNeighbors = [];
+    const idxInWheel = rueda.indexOf(lastDrawCode);
+    if (idxInWheel !== -1) {
+      wheelNeighbors.push(
+        rueda[(idxInWheel - 2 + 38) % 38],
+        rueda[(idxInWheel - 1 + 38) % 38],
+        rueda[(idxInWheel + 1) % 38],
+        rueda[(idxInWheel + 2) % 38]
+      );
+    }
+
+    // B. Espejos y Terminales
+    const obtenerEspejo = (numStr) => {
+      if (numStr === "00") return "00";
+      const val = parseInt(numStr, 10);
+      if (isNaN(val)) return null;
+      if (val < 10) {
+        const mirrorVal = val * 10;
+        return mirrorVal <= 36 ? mirrorVal.toString() : null;
+      } else {
+        const mirrorStr = numStr.charAt(1) + numStr.charAt(0);
+        const mirrorVal = parseInt(mirrorStr, 10);
+        return mirrorVal <= 36 ? mirrorVal.toString() : null;
+      }
+    };
+
+    const mirrorOfLast = obtenerEspejo(lastDrawCode);
+
+    const obtenerTerminalesBase = (numStr) => {
+      const term = numStr.slice(-1);
+      const res = [];
+      if (term === "0") {
+        res.push("0", "00", "10", "20", "30");
+      } else {
+        for (let i = 1; i <= 36; i++) {
+          const s = i.toString();
+          if (s.slice(-1) === term) {
+            res.push(s);
+          }
+        }
+      }
+      return res;
+    };
+
+    const terminalesOfLast = obtenerTerminalesBase(lastDrawCode);
+
+    // C. Co-ocurrencia Sintética
+    const coocurrenciaMap = {};
+    for (let i = 0; i < Math.min(30, sortedByRecency.length - 2); i++) {
+      const n1 = obtenerCodigoResultado(sortedByRecency[i].resultado);
+      const n2 = obtenerCodigoResultado(sortedByRecency[i+1].resultado);
+      const n3 = obtenerCodigoResultado(sortedByRecency[i+2].resultado);
+      const ids = [n1, n2, n3].filter(Boolean).sort();
+      if (ids.length >= 2) {
+        for (let j = 0; j < ids.length; j++) {
+          for (let k = j + 1; k < ids.length; k++) {
+            const pairKey = `${ids[j]}_${ids[k]}`;
+            coocurrenciaMap[pairKey] = (coocurrenciaMap[pairKey] || 0) + 1;
+          }
+        }
+      }
+    }
+    const coocurrentes = [];
+    Object.entries(coocurrenciaMap).forEach(([pair, count]) => {
+      if (count >= 2) {
+        const [p1, p2] = pair.split('_');
+        coocurrentes.push(p1, p2);
+      }
+    });
+    const coocurrentesUnicos = [...new Set(coocurrentes)];
+
+    // --- 4. HEURÍSTICA: CRONO-EVENTOS (COLORES / FECHAS) ---
+    const colors = {
+      rojo: ["0", "00", "1", "3", "6", "7", "9", "11", "14", "17", "19", "21", "23", "25", "27", "30", "31", "34"],
+      negro: ["2", "4", "5", "8", "10", "12", "13", "15", "16", "18", "20", "22", "24", "26", "28", "29", "32", "33", "35", "36"]
+    };
+    let rojoCount = 0;
+    let negroCount = 0;
+    for (let i = 0; i < Math.min(8, sortedByRecency.length); i++) {
+      const code = obtenerCodigoResultado(sortedByRecency[i].resultado);
+      if (colors.rojo.includes(code)) rojoCount++;
+      else if (colors.negro.includes(code)) negroCount++;
+    }
+
+    // --- DECISIÓN DE RÉGIMEN ---
+    let regimen = "NINGUNO";
+    let confianza = 0.0;
+    let nombreFamilia = "Ninguno";
+    let miembrosActivos = [];
+    let confluences = [];
+    let bloqueos = [];
+    let vidaUtil = 0;
+
+    if (deltaHits >= 3) {
+      regimen = "SUMA_RESTA";
+      confianza = Math.min(1.0, deltaHits / 6);
+      nombreFamilia = "Delta_Movel_Aritmetico";
+      miembrosActivos = sortedByRecency.slice(0, 10).map(s => obtenerCodigoResultado(s.resultado));
+      const valLast = parseInt(lastDrawCode, 10);
+      const valPrev = parseInt(obtenerCodigoResultado(sortedByRecency[1]?.resultado), 10);
+      if (!isNaN(valLast) && !isNaN(valPrev)) {
+        confluences.push(
+          Math.abs(valLast - valPrev).toString(),
+          ((valLast + valPrev) % 38).toString()
+        );
+      }
+      vidaUtil = 3;
+    } else if (hasRepeat) {
+      regimen = "DOBLES";
+      confianza = 0.70;
+      nombreFamilia = "Repeticion_Corta_Dobles";
+      miembrosActivos = last6Codes;
+      confluences = [...new Set([...last6Codes, ...wheelNeighbors])];
+      vidaUtil = 2;
+    } else {
+      const hoyFechaCaracas = new Date().toLocaleDateString('sv', { timeZone: 'America/Caracas' });
+      const sorteosHoy = sortedByRecency.filter(s => s.fecha === hoyFechaCaracas);
+      const codigosHoy = sorteosHoy.map(s => obtenerCodigoResultado(s.resultado)).filter(Boolean);
+      
+      const baseCounts = {};
+      codigosHoy.forEach(c => {
+        const base = c.slice(-1);
+        baseCounts[base] = (baseCounts[base] || 0) + 1;
+      });
+      
+      const basesRepetidas = Object.entries(baseCounts).filter(([b, c]) => c >= 2).map(([b]) => b);
+      
+      if (basesRepetidas.length >= 1) {
+        regimen = "FAMILIAS_SINTETICAS";
+        confianza = Math.min(1.0, 0.4 + 0.15 * codigosHoy.length);
+        nombreFamilia = `Terminales_Simetricos_Base_${basesRepetidas.join('_')}`;
+        miembrosActivos = codigosHoy.filter(c => basesRepetidas.includes(c.slice(-1)));
+        
+        const unplayedConfluences = [];
+        basesRepetidas.forEach(base => {
+          const allOfBase = obtenerTerminalesBase("0" + base);
+          allOfBase.forEach(num => {
+            if (!codigosHoy.includes(num)) {
+              unplayedConfluences.push(num);
+            }
+          });
+        });
+        
+        confluences = [...new Set([...unplayedConfluences, ...wheelNeighbors])];
+        vidaUtil = 2;
+      } else if (rojoCount >= 6 || negroCount >= 6) {
+        regimen = "FECHAS";
+        confianza = Math.min(1.0, Math.max(rojoCount, negroCount) / 8);
+        nombreFamilia = rojoCount >= 6 ? "Sesgo_Rojo_Cronos" : "Sesgo_Negro_Cronos";
+        miembrosActivos = sortedByRecency.slice(0, 8).map(s => obtenerCodigoResultado(s.resultado));
+        const colorDominante = rojoCount >= 6 ? colors.rojo : colors.negro;
+        confluences = colorDominante.filter(num => !last6Codes.includes(num));
+        vidaUtil = 3;
+      }
+    }
+
+    const allAnimalIds = Object.keys(targetAnimalMap);
+    confluences = confluences.filter(c => allAnimalIds.includes(c));
+
+    const intersection = confluences.filter(c => wheelNeighbors.includes(c) || terminalesOfLast.includes(c) || c === mirrorOfLast);
+    bloqueos = intersection.length > 0 ? intersection : confluences.slice(0, 3);
+    bloqueos = bloqueos.slice(0, 3);
+
+    return {
+      regimen_detectado: regimen,
+      coeficiente_confianza_patron: parseFloat(confianza.toFixed(2)),
+      cluster_dinamico_activo: {
+        nombre_familia: nombreFamilia,
+        miembros_activos_hoy: miembrosActivos.map(x => parseInt(x, 10) || x)
+      },
+      arrayRegimeConfluence: confluences.map(x => parseInt(x, 10) || x),
+      alerta_bloqueo_preventivo: bloqueos.map(x => parseInt(x, 10) || x),
+      vida_util_estimada_sorteos: vidaUtil
+    };
+
+  } catch (error) {
+    console.error("Error al ejecutar algoritmo cuántico de riesgos:", error);
+    return {
+      regimen_detectado: "NINGUNO",
+      coeficiente_confianza_patron: 0.0,
+      cluster_dinamico_activo: { nombre_familia: "Error", miembros_activos_hoy: [] },
+      arrayRegimeConfluence: [],
+      alerta_bloqueo_preventivo: [],
+      vida_util_estimada_sorteos: 0
+    };
+  }
+}
+
+// Actualizar análisis y aplicar Stop Loss si falla durante 3 sorteos consecutivos
+async function actualizarAnalisisCuantico(loteriaId) {
+  try {
+    const rawSorteos = [...cache.sorteos].filter(s => {
+      const normS = s.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+      const normInput = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+      return normS === normInput || 
+             (normS === 'lotto' && normInput === 'lotto_activo') ||
+             (normS === 'lotto_activo' && normInput === 'lotto') ||
+             (normS === 'granja' && normInput === 'la_granjita') ||
+             (normS === 'la_granjita' && normInput === 'granja') ||
+             (normS === 'guacharo_activo' && normInput === 'guacharo') ||
+             (normS === 'guacharo' && normInput === 'guacharo_activo');
+    });
+
+    if (rawSorteos.length === 0) return;
+
+    const parseTimeToMinutes = (h) => {
+      const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+      if (!matches) return 0;
+      let hr = parseInt(matches[1], 10);
+      const min = parseInt(matches[2], 10);
+      const meridiano = matches[3].toLowerCase();
+      if (meridiano === 'pm' && hr < 12) hr += 12;
+      if (meridiano === 'am' && hr === 12) hr = 0;
+      return hr * 60 + min;
+    };
+
+    const sorted = rawSorteos.sort((a, b) => {
+      const dateCompare = b.fecha.localeCompare(a.fecha);
+      if (dateCompare !== 0) return dateCompare;
+      return parseTimeToMinutes(b.hora) - parseTimeToMinutes(a.hora);
+    });
+
+    const ultimoSorteo = sorted[0];
+    const ultimoSorteoId = `${ultimoSorteo.loteria}_${ultimoSorteo.fecha}_${ultimoSorteo.hora}`;
+
+    const obtenerCodigoResultado = (resStr) => {
+      if (!resStr) return '';
+      const match = resStr.match(/\(#(\d+)\)/);
+      if (match) return match[1];
+      const matchPlain = resStr.match(/#(\d+)/);
+      if (matchPlain) return matchPlain[1];
+      return resStr.trim().replace(/[^\d]/g, '');
+    };
+
+    const ultimoGanadorNum = parseInt(obtenerCodigoResultado(ultimoSorteo.resultado), 10);
+
+    // Si es un sorteo nuevo y hay un régimen activo, verificar Stop Loss
+    if (memoriaRiesgoCuantico.ultimoSorteoId && memoriaRiesgoCuantico.ultimoSorteoId !== ultimoSorteoId) {
+      if (memoriaRiesgoCuantico.regimenActivo !== "NINGUNO") {
+        const acerto = memoriaRiesgoCuantico.confluenciasPrevias.includes(ultimoGanadorNum);
+        if (!acerto) {
+          memoriaRiesgoCuantico.fallosConsecutivos++;
+          console.log(`📉 [Riesgo Cuántico] El régimen ${memoriaRiesgoCuantico.regimenActivo} falló. Fallos: ${memoriaRiesgoCuantico.fallosConsecutivos}/3`);
+        } else {
+          memoriaRiesgoCuantico.fallosConsecutivos = 0;
+          console.log(`📈 [Riesgo Cuántico] El régimen ${memoriaRiesgoCuantico.regimenActivo} acertó. Reseteando fallos.`);
+        }
+
+        if (memoriaRiesgoCuantico.fallosConsecutivos >= 3) {
+          console.log(`🚨 [Stop Loss Cuántico] 3 fallos consecutivos. Purgando régimen ${memoriaRiesgoCuantico.regimenActivo} a NINGUNO.`);
+          memoriaRiesgoCuantico.regimenActivo = "NINGUNO";
+          memoriaRiesgoCuantico.fallosConsecutivos = 0;
+          memoriaRiesgoCuantico.confluenciasPrevias = [];
+        }
+      }
+    }
+
+    const analisis = await ejecutarAlgoritmoCuantico(loteriaId);
+
+    // Sobrescribir con Stop Loss si está forzado a NINGUNO
+    if (memoriaRiesgoCuantico.regimenActivo === "NINGUNO") {
+      analisis.regimen_detectado = "NINGUNO";
+      analisis.coeficiente_confianza_patron = 0.0;
+      analisis.cluster_dinamico_activo = { nombre_familia: "Ninguno", miembros_activos_hoy: [] };
+      analisis.arrayRegimeConfluence = [];
+      analisis.alerta_bloqueo_preventivo = [];
+      analisis.vida_util_estimada_sorteos = 0;
+    }
+
+    // Actualizar estado en memoria
+    memoriaRiesgoCuantico.ultimoSorteoId = ultimoSorteoId;
+    if (analisis.regimen_detectado !== "NINGUNO") {
+      memoriaRiesgoCuantico.regimenActivo = analisis.regimen_detectado;
+      memoriaRiesgoCuantico.confluenciasPrevias = analisis.arrayRegimeConfluence;
+    }
+
+    // Guardar en caché y persistir en Firestore
+    cache.riesgos.cuantico = analisis;
+    await dbSet('configuracion', 'riesgos', cache.riesgos, true);
+    console.log(`🧬 [Riesgo Cuántico] Análisis actualizado. Régimen: ${analisis.regimen_detectado} (Confianza: ${analisis.coeficiente_confianza_patron})`);
+
+  } catch (error) {
+    console.error("Error en actualizarAnalisisCuantico:", error);
+  }
+}
+
 async function obtenerEstadisticasRiesgo(loteriaId) {
   try {
     let rawSorteos = [...cache.sorteos];
@@ -1762,7 +2163,8 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
       ...data,
       listaFrecuencias: stats.listaFrecuencias,
       calientes: stats.calientes,
-      atrasados: stats.atrasados || []
+      atrasados: stats.atrasados || [],
+      cuantico: cache.riesgos.cuantico || null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2364,6 +2766,11 @@ async function registrarResultadoSorteoInternal(loteria, hora, resultado, fecha)
     }
 
     console.log(`✅ [Premiación] Sorteo ${loteria} - ${hora}: ${ganadoresCount} ganadores, ${noGanadorasCount} no ganadores, y ${anuladasCount} anuladas.`);
+    try {
+      await actualizarAnalisisCuantico(loteria);
+    } catch (e) {
+      console.error("[Riesgo Cuántico] Error al actualizar tras nuevo resultado:", e);
+    }
     return { ganadoresCount, noGanadorasCount, anuladasCount };
   } catch (error) {
     console.error(`❌ [Premiación] Error en procesamiento sorteo ${loteria} - ${hora}:`, error);
@@ -2789,6 +3196,11 @@ app.listen(PORT, async () => {
   console.log(`📡 Servidor API escuchando en http://localhost:${PORT}`);
   await inicializarCache();
   await seedLoteriasIfNeeded();
+  try {
+    await actualizarAnalisisCuantico('lotto_activo');
+  } catch (e) {
+    console.error('⚠️ [Riesgo Cuántico] Error al inicializar en el arranque:', e);
+  }
   iniciarScraperResultados();
   telegramBot = initTelegramBot({ cache, dbSet, dbUpdate, dbAdd, dbDelete, client });
 });
