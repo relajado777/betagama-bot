@@ -662,7 +662,7 @@
     }
 
     body.tv-mode .results-grid {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(4, 1fr);
       gap: 1.5rem;
       margin-top: 2rem;
       width: 100% !important;
@@ -1803,7 +1803,7 @@
       main.style.transform = 'none';
       main.style.width = '100%';
       main.style.height = 'auto';
-      main.style.padding = '2.5rem 5rem';
+      main.style.padding = '2rem';
       
       // 2. Obtener la sección de lotería activa
       const activeSection = main.querySelector('.lottery-section.active-tv');
@@ -1813,8 +1813,8 @@
       const viewportWidth = window.innerWidth;
       
       // Medir el contenido requerido (sección + espacio para el título y barra de progreso)
-      const requiredHeight = activeSection.scrollHeight + 120; // 120px de margen de seguridad
-      const requiredWidth = activeSection.scrollWidth + 160; // 160px de margen de seguridad
+      const requiredHeight = activeSection.scrollHeight + 160; // 160px de margen de seguridad (evita que se corte la parte superior)
+      const requiredWidth = activeSection.scrollWidth + 80; // 80px de margen de seguridad (ajustado para padding de 2rem)
       
       let scaleY = 1;
       let scaleX = 1;
@@ -1831,9 +1831,8 @@
       
       if (scale < 1) {
         // Reducir el padding proporcionalmente para ganar más espacio
-        const newPaddingTopBottom = Math.max(1, 2.5 * scale);
-        const newPaddingLeftRight = Math.max(2, 5 * scale);
-        main.style.padding = `${newPaddingTopBottom}rem ${newPaddingLeftRight}rem`;
+        const newPadding = Math.max(1, 2 * scale);
+        main.style.padding = `${newPadding}rem`;
         
         main.style.transform = `scale(${scale})`;
         main.style.transformOrigin = 'top center';
