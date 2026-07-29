@@ -1112,13 +1112,10 @@
     } catch(e){}
 
     if (!API_BASE) {
-      const hostname = window.location.hostname;
       if (window.location.protocol === 'file:') {
-        API_BASE = 'https://betagama-bot-production.up.railway.app';
-      } else if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
-        API_BASE = window.location.origin;
+        API_BASE = 'https://betagama-bot.onrender.com';
       } else {
-        API_BASE = 'https://betagama-bot-production.up.railway.app';
+        API_BASE = window.location.origin;
       }
     }
       
@@ -1678,13 +1675,10 @@
       } catch(e){}
       
       if (!base) {
-        const hostname = window.location.hostname;
         if (window.location.protocol === 'file:') {
-          base = 'https://betagama-bot-production.up.railway.app';
-        } else if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
-          base = window.location.origin;
+          base = 'https://betagama-bot.onrender.com';
         } else {
-          base = 'https://betagama-bot-production.up.railway.app';
+          base = window.location.origin;
         }
       }
       
