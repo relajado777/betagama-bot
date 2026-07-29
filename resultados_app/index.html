@@ -1710,7 +1710,7 @@
     }
 
     // Alternar Pantalla Completa (TV)
-    function toggleTVMode() {
+    async function toggleTVMode() {
       if (isTVUrl) {
         // En la ventana TV secundaria, "Salir de TV" cierra la ventana
         if (document.exitFullscreen) {
@@ -1721,14 +1721,38 @@
         return;
       }
       
-      // Intentar posicionar automáticamente en la segunda pantalla (a la derecha)
-      const primaryWidth = window.screen.width || 1920;
-      const primaryHeight = window.screen.height || 1080;
+      // Valores por defecto (pantalla secundaria a la derecha)
+      let left = window.screen.width || 1920;
+      let top = 0;
+      let width = window.screen.width || 1920;
+      let height = window.screen.height || 1080;
+      
+      try {
+        // Intentar usar el Window Management API para detectar la segunda pantalla física
+        if ('getScreenDetails' in window) {
+          const screenDetails = await window.getScreenDetails();
+          if (screenDetails && screenDetails.screens && screenDetails.screens.length > 1) {
+            // Buscar la pantalla que no sea la actual (la secundaria)
+            const secondScreen = screenDetails.screens.find(s => s !== screenDetails.currentScreen) || 
+                                 screenDetails.screens.find(s => !s.isPrimary);
+            if (secondScreen) {
+              left = secondScreen.left;
+              top = secondScreen.top;
+              width = secondScreen.width;
+              height = secondScreen.height;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("No se pudo obtener detalles de pantallas multi-monitor:", err);
+      }
+      
+      const tvUrl = window.location.protocol === 'file:' ? 'index.html?tv=true' : `${window.location.origin}${window.location.pathname}?tv=true`;
       
       const popup = window.open(
-        'index.html?tv=true', 
+        tvUrl, 
         'BetagamaTV', 
-        `width=${primaryWidth},height=${primaryHeight},left=${primaryWidth},top=0,menubar=no,toolbar=no,location=no,status=no`
+        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
       );
       
       if (popup) {
