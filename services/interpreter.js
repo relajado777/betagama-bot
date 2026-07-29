@@ -125,6 +125,36 @@ export const GUACHARO_ANIMALITOS_MAP = {
   "75": "guacharo"
 };
 
+// Mapeo completo de 101 animalitos para El Guacharito Millonario
+export const GUACHARITO_ANIMALITOS_MAP = {
+  ...GUACHARO_ANIMALITOS_MAP,
+  "76": "rinoceronte",
+  "77": "pinguino",
+  "78": "antilope",
+  "79": "calamar",
+  "80": "murcielago",
+  "81": "cuervo",
+  "82": "cucaracha",
+  "83": "buho",
+  "84": "camaron",
+  "85": "hamster",
+  "86": "buey",
+  "87": "cabra",
+  "88": "erizo de mar",
+  "89": "anguila",
+  "90": "huron",
+  "91": "morrocoy",
+  "92": "cisne",
+  "93": "gaviota",
+  "94": "paujil",
+  "95": "escarabajo",
+  "96": "caballito de mar",
+  "97": "loro",
+  "98": "cocodrilo",
+  "99": "guacharito"
+};
+
+
 
 // Crear un mapa inverso para buscar por nombre
 const ANIMALITOS_REVERSE = {};
@@ -229,8 +259,11 @@ Los clientes pueden referirse a montos usando expresiones venezolanas como:
 - "5 palos", "5 mil", "5 bolitas", "5k" o simplemente "5000" para Bs 5.000.
 - "1000", "un luca", "1 bolivar" (dependiendo de la denominación local, asume siempre montos numéricos limpios). Si dicen "5 palos" en el contexto actual, asume 5.000 Bs. Si dicen "500" es 500 Bs.
 
-Formato Shorthand con "x" o "*":
-Si un cliente envía "27.12.11.30 x 150 lotto", significa que juega a los animalitos correspondientes a los números 27, 12, 11 y 30, cada uno por un monto de Bs 150 en la lotería "lotto activo". De forma similar, "15.20.31x100 granja" significa que juega al 15, 20 y 31 por un monto de Bs 100 cada uno en "la granjita". También pueden escribir "juegame el 27x300 lotto", que significa jugar al perro (27) por Bs 300 en Lotto Activo.
+Formato Shorthand con múltiples delimitadores y sin espacios:
+Si un cliente envía "27.12.11.30 x 150 lotto", significa que juega a los animalitos correspondientes a los números 27, 12, 11 y 30, cada uno por un monto de Bs 150 en la lotería "lotto activo". De forma similar, "15.20.31x100 granja", "69x170 guacharo", "69-170", "69/170", "34.8.23-50" o "69:170" deben ser interpretados como apuestas válidas de sus respectivos animales por el monto indicado.
+
+Jugadas sin monto (Monto Faltante):
+Si un cliente envía una jugada clara pero olvida especificar el monto (ej: "48.60.9x guacharo", "perro x lotto", "69- guacharo"), debes responder con "valido": false y "error": "monto_faltante", incluyendo todas las jugadas detectadas en la lista "jugadas" con el campo "monto" establecido en null.
 
 INSTRUCCIONES DE RETORNO:
 Debes responder ÚNICAMENTE con un objeto JSON válido. No incluyas explicaciones, no incluyas markdown (no uses triple comillas de código \`\`\`json), solo el JSON plano.
@@ -363,11 +396,24 @@ function limpiarNombreLoteriaDeTexto(texto, lotName) {
     patterns = [/\b(para|en|de|a)?\s*lotto\s*activo\b/gi, /\b(para|en|de|a)?\s*lotto\b/gi, /\b(para|en|de|a)?\s*activo\b/gi];
   } else if (normLot.includes("granjita") || normLot.includes("granja")) {
     patterns = [/\b(para|en|de|a)?\s*la\s*granjita\b/gi, /\b(para|en|de|a)?\s*granjita\b/gi, /\b(para|en|de|a)?\s*granja\b/gi];
-  } else if (normLot.includes("guacharo")) {
+  } else if (normLot.includes("guacharo") && !normLot.includes("guacharito")) {
     patterns = [
       /\b(para|en|de|a|sorteo|loteria)\s+guacharo\s*activo\b/gi, 
       /\b(para|en|de|a|sorteo|loteria)\s+guacharo\b/gi,
       /\bguacharo\s+activo\b/gi
+    ];
+  } else if (normLot.includes("selva") || normLot.includes("plus")) {
+    patterns = [
+      /\b(para|en|de|a|sorteo|loteria)?\s*selva\s*plus\b/gi,
+      /\b(para|en|de|a|sorteo|loteria)?\s*selva\b/gi,
+      /\b(para|en|de|a|sorteo|loteria)?\s*plus\b/gi
+    ];
+  } else if (normLot.includes("guacharito") || normLot.includes("guararito")) {
+    patterns = [
+      /\b(para|en|de|a|sorteo|loteria)?\s*el\s*guacharito\s*millonario\b/gi,
+      /\b(para|en|de|a|sorteo|loteria)?\s*el\s*guacharito\b/gi,
+      /\b(para|en|de|a|sorteo|loteria)?\s*guacharito\b/gi,
+      /\b(para|en|de|a|sorteo|loteria)?\s*guararito\b/gi
     ];
   } else {
     const escapedName = normLot.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
@@ -381,7 +427,17 @@ function limpiarNombreLoteriaDeTexto(texto, lotName) {
 }
 
 function fallbackParse(text, loteriasList = []) {
-  let { cleanText, hoursMap } = findAndReplaceHours(text);
+  // Pre-procesamiento: Eliminar fechas con formato de guiones o slashes (para evitar falsos positivos con delimitadores)
+  const dateRegexes = [
+    /\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g,
+    /\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}\b/g
+  ];
+  let textWithoutDates = text;
+  dateRegexes.forEach(regex => {
+    textWithoutDates = textWithoutDates.replace(regex, "__fecha__");
+  });
+
+  let { cleanText, hoursMap } = findAndReplaceHours(textWithoutDates);
 
   // Helper to detect ALL matching lotteries in a string
   const detectarLoteriasEnTexto = (subtext) => {
@@ -393,15 +449,18 @@ function fallbackParse(text, loteriasList = []) {
         
         const isLotto = lotNameClean.includes("lotto") && (subtext.includes("lotto") || subtext.includes("activo") || subtext.includes("loto"));
         const isGranja = lotNameClean.includes("granjita") && (subtext.includes("granjita") || subtext.includes("granja"));
-        const isGuacharo = lotNameClean.includes("guacharo") && subtext.includes("guacharo");
+        const isGuacharo = lotNameClean.includes("guacharo") && !lotNameClean.includes("guacharito") && subtext.includes("guacharo") && !subtext.includes("guacharito") && !subtext.includes("guararito");
+        const isSelva = lotNameClean.includes("selva") && (subtext.includes("selva") || subtext.includes("plus"));
+        const isGuacharito = lotNameClean.includes("guacharito") && (subtext.includes("guacharito") || subtext.includes("guararito"));
         
-        if (subtext.includes(lotNameClean) || (lotIdClean && subtext.includes(lotIdClean)) || isLotto || isGranja || isGuacharo) {
+        if (subtext.includes(lotNameClean) || (lotIdClean && subtext.includes(lotIdClean)) || isLotto || isGranja || isGuacharo || isSelva || isGuacharito) {
           matches.push(lot.nombre.toLowerCase());
         }
       }
     }
     return matches;
   };
+
 
   // Find default lotteries globally
   const defaultLoterias = detectarLoteriasEnTexto(cleanText);
@@ -443,8 +502,8 @@ function fallbackParse(text, loteriasList = []) {
     return null;
   };
 
-  // Improved regexShorthand with restricted suffix matching to prevent eating subsequent plays
-  const regexShorthand = /\b((?:[a-z\s\.,\-\/_]+|\b\d{1,2}\b|__hora_\d+__)+?)\s*(?:[x\*]|\bpor\b)\s*(\d+)(?:\s*(?:para|en|de|la|el|lotto|activo|granjita|granja|guacharo|bs|bolivares|__hora_\d+__))*/gi;
+  // Separadores soportados: x, *, -, /, :, =, $ o la palabra "por"
+  const regexShorthand = /\b((?:[a-z\s\.,\-\/_]+|\d{1,2}|__hora_\d+__)+?)\s*(?:[x\*\-\/:=\$]|\bpor\b)\s*(\d+)/gi;
   let matchX;
   const processedSegments = [];
 
@@ -506,9 +565,65 @@ function fallbackParse(text, loteriasList = []) {
     }
   }
 
+  // Quitar segmentos procesados para evaluar jugadas incompletas (sin monto)
   processedSegments.sort((a, b) => b.start - a.start);
+  let textForMissing = cleanText;
   for (const seg of processedSegments) {
-    cleanText = cleanText.substring(0, seg.start) + " " + cleanText.substring(seg.end);
+    textForMissing = textForMissing.substring(0, seg.start) + " " + textForMissing.substring(seg.end);
+  }
+
+  // Capturar intenciones de jugada shorthand que no tienen monto (ej: 48.60.9x o 48.60.9-)
+  const regexShorthandMissing = /\b((?:[a-z\s\.,\-\/_]+|\d{1,2}|__hora_\d+__)+?)\s*(?:[x\*\-\/:=\$]|\bpor\b)\s*(?!\d+)/gi;
+  let matchXM;
+  while ((matchXM = regexShorthandMissing.exec(textForMissing)) !== null) {
+    const fullMatchStr = matchXM[0];
+    const lhs = matchXM[1];
+
+    let loterias = detectarLoteriasEnTexto(fullMatchStr);
+    if (loterias.length === 0) loterias = detectarLoteriasEnTexto(lhs);
+    if (loterias.length === 0) loterias = [...defaultLoterias];
+    if (loterias.length === 0) loterias = [null];
+
+    let horas = extraerHorasDeTexto(fullMatchStr) || extraerHorasDeTexto(lhs);
+    if (!horas && hoursMap.length > 0) {
+      horas = hoursMap[0];
+    }
+
+    for (const loteria of loterias) {
+      const { animalMap, reverseMap } = obtenerMapasAnimales(loteria);
+      const lhsLimpio = limpiarNombreLoteriaDeTexto(lhs, loteria);
+      const elementos = lhsLimpio.split(/[\s\.,\-]+|\by\b|\bo\b/gi);
+
+      for (const elem of elementos) {
+        const limpio = elem.trim();
+        if (!limpio || limpio.startsWith('__hora_')) continue;
+
+        let animal = null;
+        let numero = null;
+
+        if (/^\d+$/.test(limpio)) {
+          let padded = limpio.padStart(2, '0');
+          if (limpio === "0" || limpio === "00") padded = limpio;
+          if (animalMap[padded]) {
+            numero = padded;
+            animal = animalMap[padded];
+          }
+        } else if (reverseMap[limpio]) {
+          animal = limpio;
+          numero = reverseMap[limpio];
+        }
+
+        if (animal && numero) {
+          if (horas && horas.length > 0) {
+            for (const hr of horas) {
+              jugadas.push({ animal, numero, monto: null, loteria, sorteoHora: hr });
+            }
+          } else {
+            jugadas.push({ animal, numero, monto: null, loteria });
+          }
+        }
+      }
+    }
   }
 
   // 2. Traditional animal + amount
@@ -574,6 +689,11 @@ function fallbackParse(text, loteriasList = []) {
     }
   }
 
+  const hasMissingAmount = jugadas.some(j => j.monto === null || j.monto === undefined || isNaN(j.monto));
+  if (hasMissingAmount) {
+    return { valido: false, error: "monto_faltante", jugadas };
+  }
+
   if (jugadas.length > 0) {
     return { valido: true, error: null, jugadas };
   }
@@ -635,6 +755,16 @@ Por favor, asocia las jugadas del cliente con la lotería correspondiente basán
     
     const parsedResult = JSON.parse(cleanJSON);
     console.log("🧠 Respuesta del Parseador Gemini:", JSON.stringify(parsedResult));
+
+    // Validar si hay montos faltantes en el JSON entregado por Gemini
+    if (parsedResult.jugadas && parsedResult.jugadas.length > 0) {
+      const hasMissing = parsedResult.jugadas.some(j => j.monto === null || j.monto === undefined || isNaN(j.monto));
+      if (hasMissing) {
+        parsedResult.valido = false;
+        parsedResult.error = "monto_faltante";
+      }
+    }
+    
     return parsedResult;
   } catch (error) {
     console.error("❌ Error en el interpretador Gemini AI:", error);

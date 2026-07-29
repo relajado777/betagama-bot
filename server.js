@@ -48,7 +48,7 @@ console.warn = (...args) => {
 };
 import qrcodeTerminal from 'qrcode-terminal';
 import { db, isMock } from './config/firebase.js';
-import { interpretarMensaje, ANIMALITOS_MAP, GUACHARO_ANIMALITOS_MAP } from './services/interpreter.js';
+import { interpretarMensaje, ANIMALITOS_MAP, GUACHARO_ANIMALITOS_MAP, GUACHARITO_ANIMALITOS_MAP } from './services/interpreter.js';
 import fs from 'fs';
 import path from 'path';
 import { initTelegramBot } from './services/telegram.js';
@@ -62,6 +62,10 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Servir de forma estática la app de resultados (resultados_app)
+const resultadosAppPath = path.join(__dirname, '../resultados_app');
+app.use(express.static(resultadosAppPath));
 
 const PORT = process.env.PORT || 5000;
 
@@ -335,6 +339,47 @@ async function inicializarCache() {
     }
   } catch (err) {
     console.error('Error al autosanar animales de Guácharo:', err.message);
+  }
+
+  // Asegurar que Selva Plus y El Guacharito existan en la base de datos y caché
+  try {
+    const currentIds = cache.loterias.map(l => l.id);
+    
+    if (!currentIds.includes('selva_plus')) {
+      console.log('➕ Agregando Selva Plus a la base de datos de loterías...');
+      const selvaLot = {
+        id: 'selva_plus',
+        nombre: 'Selva Plus',
+        multiplicador: 30,
+        horarios: ['08:00am', '09:00am', '10:00am', '11:00am', '12:00pm', '01:00pm', '02:00pm', '03:00pm', '04:00pm', '05:00pm', '06:00pm', '07:00pm'],
+        limite: 3000,
+        cierreAnticipado: 5,
+        animales: ANIMALITOS_MAP,
+        activa: true
+      };
+      cache.loterias.push(selvaLot);
+      await dbSet('loterias', 'selva_plus', selvaLot);
+      guardarCacheEnDisco();
+    }
+
+    if (!currentIds.includes('guacharito')) {
+      console.log('➕ Agregando El Guacharito a la base de datos de loterías...');
+      const guacharitoLot = {
+        id: 'guacharito',
+        nombre: 'El Guacharito',
+        multiplicador: 70,
+        horarios: ['08:30am', '09:30am', '10:30am', '11:30am', '12:30pm', '01:30pm', '02:30pm', '03:30pm', '04:30pm', '05:30pm', '06:30pm', '07:30pm'],
+        limite: 2000,
+        cierreAnticipado: 5,
+        animales: GUACHARITO_ANIMALITOS_MAP,
+        activa: true
+      };
+      cache.loterias.push(guacharitoLot);
+      await dbSet('loterias', 'guacharito', guacharitoLot);
+      guardarCacheEnDisco();
+    }
+  } catch (err) {
+    console.error('❌ Error al verificar/sembrar nuevas loterías:', err.message);
   }
 }
 
@@ -657,6 +702,8 @@ async function procesarLimitesYSorteosDeJugadas(jugadas, loteriasList, message, 
     if (lotName === 'lotto') lotName = 'lotto activo';
     if (lotName === 'granja') lotName = 'la granjita';
     if (lotName === 'guacharo activo') lotName = 'guacharo';
+    if (lotName === 'selva') lotName = 'selva plus';
+    if (lotName === 'guacharito' || lotName === 'guararito') lotName = 'el guacharito';
     j.loteria = lotName;
 
     const configLoteria = loteriasList.find(l => {
@@ -1255,6 +1302,38 @@ async function handleWhatsAppMessage(message) {
       return;
     }
 
+    // FLUJO: Esperando que el cliente complete el monto faltante de la jugada
+    if (session.estado === 'esperando_monto_jugada') {
+      const resp = cleanText(texto);
+      if (resp === 'cancelar' || resp === 'salir') {
+        session.estado = 'idle';
+        session.jugadasPendientes = [];
+        await message.reply(`❌ *Jugada cancelada.*\n\nSi deseas hacer otra jugada, puedes enviarla ahora.`);
+        return;
+      }
+
+      // Intentar extraer el monto (solo números)
+      let cleaned = texto.replace(/[^\d]/g, '');
+      const monto = parseInt(cleaned, 10);
+
+      if (isNaN(monto) || monto <= 0) {
+        await message.reply(`⚠️ *Monto inválido.*\n\nPor favor, responde con un número entero mayor a cero (ej. *100*) para indicar el monto en Bolívares por cada animalito.\n\nEscribe *cancelar* si deseas abortar.`);
+        return;
+      }
+
+      // Asignar el monto a las jugadas que no lo tienen
+      session.jugadasPendientes.forEach(j => {
+        if (j.monto === null || j.monto === undefined || isNaN(j.monto)) {
+          j.monto = monto;
+        }
+      });
+
+      // Ahora que todas tienen monto, procesarlas
+      // Si alguna aún no tiene lotería, el procesador interno se encargará de pedirla
+      await procesarLimitesYSorteosDeJugadas(session.jugadasPendientes, loteriasList, message, session, clienteData, nombreCliente);
+      return;
+    }
+
     // FLUJO RETIRO: Esperando monto
     if (session.estado === 'esperando_monto_retiro') {
       const resp = cleanText(texto);
@@ -1450,6 +1529,23 @@ async function handleWhatsAppMessage(message) {
     // FLUJO 2 Y 3: Jugada Simple o Múltiple (Interpretación del mensaje)
     const interpretacion = await interpretarMensaje(texto, loteriasList);
 
+    // Interceptar si falta especificar el monto de las jugadas
+    if (!interpretacion.valido && interpretacion.error === 'monto_faltante' && interpretacion.jugadas && interpretacion.jugadas.length > 0) {
+      session.jugadasPendientes = interpretacion.jugadas;
+      session.estado = 'esperando_monto_jugada';
+
+      let listadoResumen = '';
+      interpretacion.jugadas.forEach((j, index) => {
+        const lotInfo = j.loteria ? `en *${j.loteria.toUpperCase()}*` : `(Lotería pendiente ❓)`;
+        const nameClean = j.animal ? j.animal.charAt(0).toUpperCase() + j.animal.slice(1) : `Número ${j.numero}`;
+        listadoResumen += `${index + 1}️⃣ 🐾 *${nameClean}* (#${j.numero}) ${lotInfo}\n`;
+      });
+
+      let msgFaltaMonto = `¡Hola *${nombreCliente}*! 😊\n\nDetecté que deseas registrar la siguiente jugada:\n\n${listadoResumen}\n⚠️ *Pero te faltó indicar el monto de la apuesta.*\n\n*¿De cuánto (Bs.) deseas hacer tu jugada por cada animalito?* (Responde solo con el número, ej. *100*).\n\n_Escribe *cancelar* si deseas abortar._`;
+      await message.reply(msgFaltaMonto);
+      return;
+    }
+
     if (interpretacion.valido && interpretacion.jugadas && interpretacion.jugadas.length > 0) {
       // Verificar si alguna jugada no tiene la lotería especificada
       const jugadasSinLoteria = interpretacion.jugadas.filter(j => !j.loteria);
@@ -1582,7 +1678,11 @@ const deleteSingletonLocks = (dir) => {
   }
 };
 
-inicializarClienteWhatsApp();
+if (process.env.DISABLE_WHATSAPP_BOT !== 'true') {
+  inicializarClienteWhatsApp();
+} else {
+  console.log('🤖 Bot de WhatsApp desactivado mediante variable de entorno DISABLE_WHATSAPP_BOT.');
+}
 
 // Memoria volátil del motor de riesgo cuántico (Stop Loss)
 let memoriaRiesgoCuantico = {
@@ -1991,7 +2091,11 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
                (normSorteo === 'granja' && normInput === 'la_granjita') ||
                (normSorteo === 'la_granjita' && normInput === 'granja') ||
                (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
-               (normSorteo === 'guacharo' && normInput === 'guacharo_activo');
+               (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
+               (normSorteo === 'selva' && normInput === 'selva_plus') ||
+               (normSorteo === 'selva_plus' && normInput === 'selva') ||
+               (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
+               (normSorteo === 'el_guacharito' && normInput === 'guacharito');
       });
 
       // Buscar el mapa de animales dinámico en caché para esta lotería
@@ -2001,7 +2105,9 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
         return normName === normInput || normId === normInput ||
                (normName === 'lotto_activo' && normInput === 'lotto') ||
                (normName === 'la_granjita' && normInput === 'granja') ||
-               (normName === 'guacharo' && normInput === 'guacharo_activo');
+               (normName === 'guacharo' && normInput === 'guacharo_activo') ||
+               (normName === 'selva_plus' && normInput === 'selva') ||
+               (normName === 'el_guacharito' && normInput === 'guacharito');
       });
       if (matchedLot && matchedLot.animales && Object.keys(matchedLot.animales).length > 0) {
         targetAnimalMap = matchedLot.animales;
@@ -2840,15 +2946,33 @@ async function registrarResultadoSorteoInternal(loteria, hora, resultado, fecha)
 }
 
 // Scraper automático de resultados de lotería
-async function ejecutarScraperResultados() {
-  console.log('🔍 [Scraper] Consultando resultados en lotoven.com...');
+// Scraper automático de resultados de lotería para una fecha en específico
+async function ejecutarScraperParaFecha(postFecha, targetFecha) {
   try {
-    const res = await fetch('https://lotoven.com/animalitos/');
-    if (!res.ok) {
-      console.warn(`[Scraper] Error en petición HTTP: ${res.status}`);
-      return;
+    let html = '';
+    if (postFecha) {
+      // Petición POST para fecha histórica (ayer)
+      const res = await fetch('https://lotoven.com/animalitos/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `fecha=${postFecha}`
+      });
+      if (!res.ok) {
+        console.warn(`[Scraper] Error en petición POST para fecha ${postFecha}: ${res.status}`);
+        return;
+      }
+      html = await res.text();
+    } else {
+      // Petición GET estándar para el día de hoy
+      const res = await fetch('https://lotoven.com/animalitos/');
+      if (!res.ok) {
+        console.warn(`[Scraper] Error en petición GET: ${res.status}`);
+        return;
+      }
+      html = await res.text();
     }
-    const html = await res.text();
 
     const obtenerBloque = (loteriaId) => {
       const startTag = `<div id="${loteriaId}"`;
@@ -2863,11 +2987,12 @@ async function ejecutarScraperResultados() {
     const loterias = [
       { id: 'lottoactivo', name: 'lotto activo' },
       { id: 'lagranjita', name: 'la granjita' },
-      { id: 'guacharoactivo', name: 'guacharo' }
+      { id: 'guacharoactivo', name: 'guacharo' },
+      { id: 'selvaplus', name: 'selva plus' },
+      { id: 'elguacharitomillonario', name: 'el guacharito' }
     ];
 
     const regexItem = /<span class="info[^>]*>\s*(\d+)\s+([a-zA-ZáéíóúüñÉÓÚ\s]+)\s*<\/span>\s*<span class="info2\s+horario"[^>]*>\s*(\d{2}:\d{2})\s*([AP]M)\s*<\/span>/gi;
-    const fechaHoy = new Date().toLocaleDateString('sv', { timeZone: 'America/Caracas' });
 
     for (const lot of loterias) {
       const block = obtenerBloque(lot.id);
@@ -2883,17 +3008,39 @@ async function ejecutarScraperResultados() {
         const horaFormateada = `${horaStr}${meridiano}`; // Ej: "09:00am"
 
         // Verificar si este sorteo ya se registró en el Caché
-        const sorteoId = `${lot.name}_${fechaHoy}_${horaFormateada}`.replace(/\s+/g, '_');
+        const sorteoId = `${lot.name}_${targetFecha}_${horaFormateada}`.replace(/\s+/g, '_');
         const sorteoExiste = cache.sorteos.some(s => s.id === sorteoId);
 
         if (!sorteoExiste) {
-          console.log(`✨ [Scraper] ¡NUEVO SORTEO DETECTADO! ${lot.name} (${horaFormateada}) ➔ ${animal} (#${numero})`);
-          await registrarResultadoSorteoInternal(lot.name, horaFormateada, numero, fechaHoy);
+          console.log(`✨ [Scraper] ¡NUEVO SORTEO DETECTADO (${targetFecha})! ${lot.name} (${horaFormateada}) ➔ ${animal} (#${numero})`);
+          await registrarResultadoSorteoInternal(lot.name, horaFormateada, numero, targetFecha);
         }
       }
     }
+  } catch (err) {
+    console.error(`❌ [Scraper] Error al procesar fecha ${targetFecha}:`, err.message);
+  }
+}
+
+// Scraper automático de resultados de lotería (Hoy y Ayer)
+async function ejecutarScraperResultados() {
+  console.log('🔍 [Scraper] Consultando resultados en lotoven.com...');
+  try {
+    const fechaHoy = new Date().toLocaleDateString('sv', { timeZone: 'America/Caracas' });
+    
+    // Calcular la fecha de ayer en formato YYYY-MM-DD
+    const dAyer = new Date();
+    dAyer.setDate(dAyer.getDate() - 1);
+    const fechaAyer = dAyer.toLocaleDateString('sv', { timeZone: 'America/Caracas' });
+
+    // 1. Scrapear resultados de hoy
+    await ejecutarScraperParaFecha(null, fechaHoy);
+
+    // 2. Scrapear resultados de ayer
+    await ejecutarScraperParaFecha(fechaAyer, fechaAyer);
+
   } catch (error) {
-    console.error('❌ [Scraper] Error en ejecución:', error);
+    console.error('❌ [Scraper] Error en ejecución del Scraper:', error);
   }
 }
 
@@ -2910,7 +3057,10 @@ function iniciarScraperResultados() {
     }
   };
 
-  ejecutarSiEnHorario(); // Ejecutar inmediatamente al iniciar
+  // Ejecutar una vez de forma incondicional al iniciar el servidor para cargar resultados previos del día
+  console.log("🔄 [Scraper] Ejecución inicial forzada al arrancar el servidor para obtener resultados recientes...");
+  ejecutarScraperResultados().catch(err => console.error("Error en ejecución inicial del scraper:", err));
+
   setInterval(ejecutarSiEnHorario, 5 * 60 * 1000); // Cada 5 minutos
 }
 
