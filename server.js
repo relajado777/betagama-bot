@@ -64,7 +64,10 @@ app.use(cors());
 app.use(express.json());
 
 // Servir de forma estática la app de resultados (resultados_app)
-const resultadosAppPath = path.join(__dirname, '../resultados_app');
+let resultadosAppPath = path.join(__dirname, '../resultados_app');
+if (!fs.existsSync(resultadosAppPath)) {
+  resultadosAppPath = path.join(process.cwd(), 'resultados_app');
+}
 app.use(express.static(resultadosAppPath));
 
 const PORT = process.env.PORT || 5000;

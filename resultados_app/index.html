@@ -1,0 +1,2298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resultados de Animalitos - Oficial</title>
+  
+  <!-- Google Fonts: Outfit (headings) & Inter (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #f8fafc; /* Slate 50 - Fondo muy claro */
+      --bg-card: rgba(255, 255, 255, 0.85); /* Tarjetas blancas premium */
+      --bg-card-hover: rgba(255, 255, 255, 0.95);
+      --border-color: rgba(99, 102, 241, 0.08); /* Borde sutil */
+      
+      --color-primary: #4f46e5; /* Indigo 600 */
+      
+      /* Temas de color de las Loterías */
+      --color-lotto-from: #f97316;
+      --color-lotto-to: #ea580c;
+      --color-granja-from: #10b981;
+      --color-granja-to: #059669;
+      --color-guacharo-from: #a855f7;
+      --color-guacharo-to: #7c3aed;
+      --color-selva-from: #eab308;
+      --color-selva-to: #ca8a04;
+      --color-guacharito-from: #ec4899;
+      --color-guacharito-to: #db2777;
+      
+      --text-main: #0f172a; /* Slate 900 - Texto principal oscuro */
+      --text-muted: #64748b; /* Slate 500 - Texto secundario gris */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(234, 88, 12, 0.03) 0%, transparent 40%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.5s;
+    }
+
+    header {
+      padding: 1.5rem 1rem;
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-container {
+      max-width: 96%;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      font-size: 2rem;
+      animation: bounce 3s infinite alternate;
+    }
+
+    @keyframes bounce {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-5px); }
+    }
+
+    .brand-title h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #0f172a 30%, #4f46e5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-title p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* Header Actions */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Connection Status */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 9999px;
+      background: rgba(0, 0, 0, 0.03);
+      border: 1px solid var(--border-color);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #9ca3af;
+      box-shadow: 0 0 8px #9ca3af;
+    }
+
+    .status-dot.online {
+      background-color: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.offline {
+      background-color: #ef4444;
+      box-shadow: 0 0 10px #ef4444;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .tv-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, var(--color-primary) 0%, #4f46e5 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2);
+      transition: all 0.2s;
+    }
+
+    .tv-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 15px rgba(99, 102, 241, 0.3);
+    }
+
+    main {
+      flex: 1;
+      max-width: 96%;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      transition: all 0.3s;
+    }
+
+    /* Controls: Tabs & Search */
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      background: var(--bg-card);
+      padding: 0.75rem;
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(16px);
+    }
+
+    .tabs {
+      display: flex;
+      background: rgba(0, 0, 0, 0.05);
+      padding: 0.25rem;
+      border-radius: 10px;
+    }
+
+    .tab-btn {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      border: none;
+      background: none;
+      padding: 0.6rem 1.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: var(--color-primary);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    }
+
+    .search-box {
+      position: relative;
+      flex-grow: 1;
+      max-width: 320px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 0.6rem 1rem 0.6rem 2.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--text-main);
+      font-size: 0.9rem;
+      transition: all 0.3s;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      opacity: 0.5;
+    }
+
+    /* Filter Chips */
+    .filter-chips {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      background: rgba(0, 0, 0, 0.02);
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+
+    .chip.active[data-lottery="todas"] {
+      background: rgba(0, 0, 0, 0.08);
+      color: var(--text-main);
+      border-color: rgba(0, 0, 0, 0.15);
+    }
+
+    .chip.active[data-lottery="lotto"] {
+      background: var(--color-lotto-from);
+      color: #fff;
+      border-color: var(--color-lotto-from);
+      box-shadow: 0 4px 10px rgba(249, 115, 22, 0.2);
+    }
+
+    .chip.active[data-lottery="granja"] {
+      background: var(--color-granja-from);
+      color: #fff;
+      border-color: var(--color-granja-from);
+      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+    }
+
+    .chip.active[data-lottery="guacharo"] {
+      background: var(--color-guacharo-from);
+      color: #fff;
+      border-color: var(--color-guacharo-from);
+      box-shadow: 0 4px 10px rgba(168, 85, 247, 0.2);
+    }
+
+    .chip.active[data-lottery="selva"] {
+      background: var(--color-selva-from);
+      color: #fff;
+      border-color: var(--color-selva-from);
+      box-shadow: 0 4px 10px rgba(234, 179, 8, 0.2);
+    }
+
+    .chip.active[data-lottery="guacharito"] {
+      background: var(--color-guacharito-from);
+      color: #fff;
+      border-color: var(--color-guacharito-from);
+      box-shadow: 0 4px 10px rgba(236, 72, 153, 0.2);
+    }
+
+    /* Refresh Section */
+    .refresh-row {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .refresh-indicator {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    /* Lottery Results Sections */
+    .lottery-section {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .lottery-title-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .lottery-indicator-bar {
+      width: 6px;
+      height: 24px;
+      border-radius: 3px;
+    }
+
+    .lottery-indicator-bar.lotto {
+      background: var(--color-lotto-from);
+    }
+    .lottery-indicator-bar.granja {
+      background: var(--color-granja-from);
+    }
+    .lottery-indicator-bar.guacharo {
+      background: var(--color-guacharo-from);
+    }
+
+    .lottery-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Cards Grid */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* Result Card */
+    .result-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    }
+
+    .result-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+    }
+
+    .result-card.lotto::before {
+      background: linear-gradient(90deg, var(--color-lotto-from), var(--color-lotto-to));
+    }
+    .result-card.granja::before {
+      background: linear-gradient(90deg, var(--color-granja-from), var(--color-granja-to));
+    }
+    .result-card.guacharo::before {
+      background: linear-gradient(90deg, var(--color-guacharo-from), var(--color-guacharo-to));
+    }
+    .result-card.selva::before {
+      background: linear-gradient(90deg, var(--color-selva-from), var(--color-selva-to));
+    }
+    .result-card.guacharito::before {
+      background: linear-gradient(90deg, var(--color-guacharito-from), var(--color-guacharito-to));
+    }
+
+    .result-card:hover {
+      transform: translateY(-5px) scale(1.02);
+      border-color: rgba(99, 102, 241, 0.2);
+      background: var(--bg-card-hover);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
+    }
+
+    .card-hour {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .card-emoji-container {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.02);
+      border: 1px solid var(--border-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+      transition: transform 0.3s;
+    }
+
+    .result-card:hover .card-emoji-container {
+      transform: scale(1.1) rotate(5deg);
+    }
+
+    .card-animal-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--text-main);
+      text-transform: capitalize;
+      margin-bottom: 0.25rem;
+    }
+
+    .card-animal-number {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--text-main), var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0;
+    }
+
+    .official-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.02);
+      border: 1px solid var(--border-color);
+    }
+
+    .result-card.lotto .official-badge {
+      color: #ea580c;
+      background: rgba(249, 115, 22, 0.08);
+      border-color: rgba(249, 115, 22, 0.15);
+    }
+    .result-card.granja .official-badge {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.15);
+    }
+    .result-card.guacharo .official-badge {
+      color: #6d28d9;
+      background: rgba(168, 85, 247, 0.08);
+      border-color: rgba(168, 85, 247, 0.15);
+    }
+    .result-card.selva .official-badge {
+      color: #854d0e;
+      background: rgba(234, 179, 8, 0.08);
+      border-color: rgba(234, 179, 8, 0.15);
+    }
+    .result-card.guacharito .official-badge {
+      color: #be185d;
+      background: rgba(236, 72, 153, 0.08);
+      border-color: rgba(236, 72, 153, 0.15);
+    }
+
+    /* States (Loading, Empty, Error) */
+    .state-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 3.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 1rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .state-icon {
+      font-size: 3rem;
+    }
+
+    .state-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .state-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      max-width: 400px;
+      line-height: 1.5;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0, 0, 0, 0.05);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Footer */
+    footer {
+      padding: 2rem 1rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(12px);
+      margin-top: auto;
+    }
+
+    footer p {
+      margin-bottom: 0.5rem;
+    }
+
+    /* ==========================================================================
+       FULLSCREEN TV MODE (ESTILO PANTALLA COMPLETA & ROTADOR)
+       ========================================================================== */
+    body.tv-mode {
+      background-image: 
+        radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+        radial-gradient(circle at 10% 10%, rgba(234, 88, 12, 0.04) 0%, transparent 40%);
+      overflow: hidden;
+      padding: 0;
+    }
+    
+    body.tv-mode header,
+    body.tv-mode footer,
+    body.tv-mode .controls-row,
+    body.tv-mode .refresh-row {
+      display: none !important;
+    }
+    
+    body.tv-mode main {
+      max-width: 100%;
+      width: 100vw;
+      height: 100vh;
+      padding: 2.5rem 5rem;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 1.5rem;
+      overflow: hidden; /* Evitar scrollbar en TV */
+    }
+
+    /* Ocultar secciones de lotería por defecto en Modo TV para el rotador */
+    body.tv-mode .lottery-section {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      height: 100%;
+      animation: slideIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    /* Clase activa para mostrar solo la lotería actual en rotación */
+    body.tv-mode .lottery-section.active-tv {
+      display: flex !important;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(60px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    body.tv-mode .lottery-name {
+      font-size: 2.8rem;
+    }
+
+    body.tv-mode .lottery-indicator-bar {
+      height: 48px;
+      width: 10px;
+    }
+
+    body.tv-mode .results-grid {
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 3rem;
+      margin-top: 2rem;
+    }
+
+    /* Estilos para modo compacto cuando hay más de 8 sorteos en el día */
+    body.tv-mode .results-grid.compact-grid {
+      grid-template-columns: repeat(6, 1fr);
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    body.tv-mode .results-grid.compact-grid .result-card {
+      padding: 2.2rem 1.25rem;
+      border-radius: 24px;
+    }
+
+    body.tv-mode .results-grid.compact-grid .card-hour {
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
+    }
+
+    body.tv-mode .results-grid.compact-grid .card-emoji-container {
+      width: 130px;
+      height: 130px;
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      background: rgba(0, 0, 0, 0.02);
+      border: 1px solid var(--border-color);
+    }
+
+    body.tv-mode .results-grid.compact-grid .card-animal-name {
+      font-size: 2.1rem;
+      margin-bottom: 0.4rem;
+    }
+
+    body.tv-mode .results-grid.compact-grid .card-animal-number {
+      font-size: 2.5rem;
+      margin-bottom: 0;
+    }
+
+    body.tv-mode .result-card {
+      padding: 3rem 2rem;
+      border-radius: 36px;
+      border-width: 2px;
+      background: var(--bg-card);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
+    }
+
+    body.tv-mode .card-hour {
+      font-size: 2.0rem;
+      margin-bottom: 1.5rem;
+    }
+
+    body.tv-mode .card-emoji-container {
+      width: 170px;
+      height: 170px;
+      font-size: 5rem;
+      margin-bottom: 1.5rem;
+      background: rgba(0, 0, 0, 0.02);
+      border: 1px solid var(--border-color);
+    }
+
+    body.tv-mode .card-animal-name {
+      font-size: 2.8rem;
+      margin-bottom: 0.6rem;
+    }
+
+    body.tv-mode .card-animal-number {
+      font-size: 3.2rem;
+      margin-bottom: 0;
+    }
+
+    /* TV Mode Exit Button */
+    #exit-tv-btn {
+      display: none;
+      position: fixed;
+      top: 2.5rem;
+      right: 2.5rem;
+      z-index: 99999;
+      background: rgba(239, 68, 68, 0.85);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: white;
+      font-weight: 700;
+      padding: 0.8rem 1.5rem;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+      transition: all 0.2s;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #exit-tv-btn:hover {
+      background: #ef4444;
+      transform: scale(1.05);
+    }
+
+    body.tv-mode #exit-tv-btn {
+      display: block;
+    }
+
+    /* Barra de Progreso de la Rotación en la base de la pantalla */
+    #tv-progress-bar-container {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 99999;
+    }
+
+    #tv-progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-primary), #a855f7);
+      transition: width 0.1s linear;
+    }
+
+    body.tv-mode #tv-progress-bar-container {
+      display: block;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(10px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 100000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-content {
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 650px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+      padding: 1.5rem;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+    .modal-overlay.active .modal-content {
+      transform: scale(1);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.8rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .close-btn:hover {
+      color: #ff4d4d;
+    }
+    .modal-body {
+      flex: 1;
+    }
+    .riesgo-section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-top: 1.2rem;
+      margin-bottom: 0.6rem;
+      color: var(--color-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .blocked-animal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .blocked-animal-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      padding: 0.4rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .stat-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .stat-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .stat-badge.caliente {
+      background: rgba(249, 115, 22, 0.08);
+      border: 1px solid rgba(249, 115, 22, 0.2);
+      color: #c2410c;
+    }
+    .stat-badge.atrasado {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      color: #1d4ed8;
+    }
+
+    /* Switch/Toggle Premium Styles */
+    .switch-label {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch-label input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #cbd5e1;
+      transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 34px;
+    }
+    .switch-slider::before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    }
+    .switch-label input:checked + .switch-slider {
+      background-color: var(--color-primary);
+    }
+    .switch-label input:checked + .switch-slider::before {
+      transform: translateX(18px);
+    }
+    
+    body.tv-mode .tv-toggle-container {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TV Mode Activation Overlay (para forzar pantalla completa) -->
+  <div id="tv-activation-overlay" onclick="requestTVFullscreen()" style="
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(248, 250, 252, 0.95);
+    background-image: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 60%);
+    z-index: 999999;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5rem;
+    cursor: pointer;
+    backdrop-filter: blur(15px);
+    text-align: center;
+    padding: 2rem;
+  ">
+    <div style="font-size: 5rem; animation: pulse 2s infinite;">📺</div>
+    <h2 style="font-family: 'Outfit', sans-serif; font-size: 2.2rem; font-weight: 800; color: #0f172a; line-height: 1.3; max-width: 600px; margin: 0;">
+      Modo TV Activado
+    </h2>
+    <p style="font-size: 1.15rem; color: var(--text-muted); max-width: 500px; line-height: 1.6; margin: 0;">
+      Haz clic en cualquier parte de esta pantalla para activar el modo de <strong>Pantalla Completa</strong> y ocultar el navegador.
+    </p>
+    <button class="tv-btn" style="padding: 0.8rem 2.2rem; font-size: 1rem; font-weight: 700; margin-top: 1rem; border-radius: 9999px;">
+      Comenzar Transmisión ➔
+    </button>
+  </div>
+
+  <!-- TV Mode Exit Overlay Button -->
+  <button id="exit-tv-btn" onclick="toggleTVMode()">
+    🚪 Salir de Pantalla Completa
+  </button>
+
+  <!-- TV Mode Progress Bar -->
+  <div id="tv-progress-bar-container">
+    <div id="tv-progress-bar"></div>
+  </div>
+
+  <header>
+    <div class="header-container">
+      <div class="brand">
+        <span class="brand-logo">🎰</span>
+        <div class="brand-title">
+          <h1>Betagama Resultados</h1>
+          <p>Consulta de Animalitos Oficial</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <!-- Selector de Tiempo de Rotación -->
+        <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0, 0, 0, 0.03); border: 1px solid var(--border-color); padding: 0.4rem 0.8rem; border-radius: 9999px;">
+          <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-transform: uppercase; letter-spacing: 0.5px;">Rotación:</span>
+          <select id="rotation-time-select" onchange="changeRotationTime(this.value)" style="
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            outline: none;
+          ">
+            <option value="5" style="background: #fff; color: #000;">5 seg</option>
+            <option value="10" style="background: #fff; color: #000;">10 seg</option>
+            <option value="15" style="background: #fff; color: #000;">15 seg</option>
+            <option value="20" style="background: #fff; color: #000;">20 seg</option>
+            <option value="30" style="background: #fff; color: #000;">30 seg</option>
+          </select>
+        </div>
+ 
+        <button id="riesgos-btn" class="tv-btn" onclick="openRiesgosModal()" style="margin-right: 0.5rem; background: linear-gradient(135deg, #4f46e5, #6366f1); border-color: #4f46e5;">
+          🛡️ Límites y Bloqueos
+        </button>
+        <button id="tv-mode-btn" class="tv-btn" onclick="toggleTVMode()">
+          📺 Pantalla Completa (TV)
+        </button>
+        <div class="status-badge">
+          <span id="status-dot" class="status-dot"></span>
+          <span id="status-text">Conectando...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+ 
+  <main>
+    <!-- Controls (Tabs, Search, Filter Chips) -->
+    <div class="controls-row">
+      <div class="tabs">
+        <button id="tab-hoy" class="tab-btn active" onclick="changeDay('hoy')">Hoy</button>
+        <button id="tab-ayer" class="tab-btn" onclick="changeDay('ayer')">Ayer</button>
+      </div>
+      
+      <div class="filter-chips">
+        <span class="chip active" data-lottery="todas" onclick="filterLottery('todas')">Todas</span>
+        <span class="chip" data-lottery="lotto" onclick="filterLottery('lotto')">Lotto Activo</span>
+        <span class="chip" data-lottery="granja" onclick="filterLottery('granja')">La Granjita</span>
+        <span class="chip" data-lottery="guacharo" onclick="filterLottery('guacharo')">Guácharo Activo</span>
+        <span class="chip" data-lottery="selva" onclick="filterLottery('selva')">Selva Plus</span>
+        <span class="chip" data-lottery="guacharito" onclick="filterLottery('guacharito')">El Guacharito</span>
+      </div>
+ 
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search" class="search-input" placeholder="Buscar por animal o hora..." oninput="handleSearch()">
+      </div>
+    </div>
+ 
+    <!-- Polling Timer Row -->
+    <div class="refresh-row">
+      <span id="refresh-indicator" class="refresh-indicator"></span>
+      <span id="timer-text">Cargando resultados...</span>
+    </div>
+ 
+    <!-- Results Display Area -->
+    <div id="results-container">
+      <!-- Loading State initially -->
+      <div class="state-container">
+        <div class="spinner"></div>
+        <div class="state-title">Cargando resultados del servidor...</div>
+        <div class="state-desc">Obteniendo datos de sorteos oficiales desde la base de datos de Betagama.</div>
+      </div>
+    </div>
+  <!-- Modal Control de Riesgos -->
+  <div id="riesgos-modal" class="modal-overlay" onclick="handleOverlayClick(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main); font-family: 'Outfit', sans-serif;">
+          🛡️ Límites y Bloqueos de Jugadas
+        </h3>
+        <button class="close-btn" onclick="closeRiesgosModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1.2rem; display: flex; align-items: center; gap: 0.8rem;">
+          <label style="font-weight: 600; font-size: 0.9rem; font-family: 'Outfit', sans-serif; color: var(--text-muted);">Seleccionar Lotería:</label>
+          <select id="riesgos-loteria-select" onchange="cargarRiesgosModal()" style="
+            background: rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            color: var(--text-main);
+            padding: 0.4rem 0.8rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+          ">
+            <option value="lotto_activo" style="background: var(--bg-card); color: var(--text-main);">Lotto Activo</option>
+            <option value="la_granjita" style="background: var(--bg-card); color: var(--text-main);">La Granjita</option>
+            <option value="guacharo" style="background: var(--bg-card); color: var(--text-main);">Guácharo Activo</option>
+            <option value="selva_plus" style="background: var(--bg-card); color: var(--text-main);">Selva Plus</option>
+            <option value="el_guacharito" style="background: var(--bg-card); color: var(--text-main);">El Guacharito</option>
+          </select>
+        </div>
+        <div id="riesgos-modal-body-content">
+          <div style="text-align: center; padding: 2rem; color: var(--text-muted);">Cargando configuración...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 Betagama Lottery Agency. Todos los derechos reservados.</p>
+    <p style="opacity: 0.5; font-size: 0.75rem;">Los resultados mostrados corresponden a la información recopilada en tiempo real de los sorteos oficiales.</p>
+  </footer>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const isTVUrl = urlParams.get('tv') === 'true';
+
+    // Configuración dinámica de la API (conmuta automáticamente entre local y producción)
+    let API_BASE = '';
+    try {
+      API_BASE = localStorage.getItem('betagama_server_ip') || '';
+    } catch(e){}
+
+    if (!API_BASE) {
+      const hostname = window.location.hostname;
+      if (window.location.protocol === 'file:') {
+        API_BASE = 'https://betagama-bot-production.up.railway.app';
+      } else if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+        API_BASE = window.location.origin;
+      } else {
+        API_BASE = 'https://betagama-bot-production.up.railway.app';
+      }
+    }
+      
+    let API_URL = `${API_BASE}/api/sorteos`;
+    const POLLING_INTERVAL = 60; // segundos
+    let TV_ROTATION_INTERVAL = 10; // segundos por lotería en modo TV (modificable)
+    try {
+      const storedInterval = localStorage.getItem('betagama_rotation_interval');
+      if (storedInterval) {
+        TV_ROTATION_INTERVAL = parseInt(storedInterval, 10);
+      }
+    } catch(e){}
+    
+    // Estado global de la aplicación
+    let allSorteos = [];
+    let currentDay = 'hoy'; // 'hoy' o 'ayer'
+    let currentLotteryFilter = 'todas'; // 'todas', 'lotto', 'granja', 'guacharo'
+    let searchQuery = '';
+    let pollingTimer = null;
+    let countdown = POLLING_INTERVAL;
+
+    // Variables de rotación en Modo TV
+    let tvProgressTimer = null;
+    let tvSecondsElapsed = 0;
+
+    // Loterías que participarán en la rotación de TV
+    let tvEnabledLotteries = ['lotto', 'granja', 'guacharo', 'selva', 'guacharito'];
+    try {
+      const stored = localStorage.getItem('betagama_tv_enabled_lotteries');
+      if (stored) {
+        tvEnabledLotteries = JSON.parse(stored);
+      }
+    } catch(e){}
+
+    function isTVLotteryEnabled(lotClass) {
+      return tvEnabledLotteries.includes(lotClass);
+    }
+
+    function toggleTVLottery(lotClass, enabled) {
+      if (enabled) {
+        if (!tvEnabledLotteries.includes(lotClass)) {
+          tvEnabledLotteries.push(lotClass);
+        }
+      } else {
+        tvEnabledLotteries = tvEnabledLotteries.filter(x => x !== lotClass);
+      }
+      try {
+        localStorage.setItem('betagama_tv_enabled_lotteries', JSON.stringify(tvEnabledLotteries));
+      } catch(e){}
+      
+      // Si estamos en modo TV, reiniciar la rotación para aplicar el cambio
+      if (document.body.classList.contains('tv-mode')) {
+        initTVRotation();
+      }
+    }
+
+    // Animal Emojis para todos los sorteos
+    const ANIMAL_EMOJIS = {
+      // 1 a 36 (Comunes)
+      "ballena": "🐳", "delfin": "🐬", "carnero": "🐏", "toro": "🐂", 
+      "ciempies": "🐛", "alacran": "🦂", "leon": "🦁", "rana": "🐸", 
+      "perico": "🦜", "raton": "🐭", "aguila": "🦅", "tigre": "🐯", 
+      "gato": "🐱", "caballo": "🐴", "mono": "🐒", "paloma": "🐦", 
+      "zorro": "🦊", "oso": "🐻", "pavo": "🦃", "burro": "🫏", 
+      "chivo": "🐐", "cochino": "🐷", "gallo": "🐓", "camello": "🐫", 
+      "cebra": "🦓", "iguana": "🦎", "gallina": "🐔", "vaca": "🐄", 
+      "perro": "🐶", "zamuro": "🐦", "elefante": "🐘", "caiman": "🐊", 
+      "lapa": "🦦", "ardilla": "🐿️", "pescado": "🐟", "venado": "🦌", 
+      "jirafa": "🦒", "culebra": "🐍",
+      
+      // 37 a 75 (Guácharo Activo extendido)
+      "tortuga": "🐢", "bufalo": "🦬", "lechuza": "🦉", "avispa": "🐝",
+      "canguro": "🦘", "tucan": "🦜", "mariposa": "🦋", "chiguire": "🦫",
+      "garza": "🐦", "puma": "🐆", "pavo real": "🦚", "puercoespin": "🦔",
+      "pereza": "🦥", "canario": "🐤", "pelicano": "🐦", "pulpo": "🐙",
+      "caracol": "🐌", "grillo": "🦗", "oso hormiguero": "🐻", "tiburon": "🦈",
+      "pato": "🦆", "hormiga": "🐜", "pantera": "🐆", "camaleon": "🦎",
+      "panda": "🐼", "cachicamo": "🛡️", "cangrejo": "🦀", "gavilan": "🦅",
+      "arana": "🕷️", "lobo": "🐺", "avestruz": "🦤", "jaguar": "🐆",
+      "conejo": "🐰", "bisonte": "🦬", "guacamaya": "🦜", "gorila": "🦍",
+      "hipopotamo": "🦛", "turpial": "🐦", "guacharo": "🦇",
+      "rinoceronte": "🦏", "pinguino": "🐧", "antilope": "🦌", "calamar": "🦑",
+      "murcielago": "🦇", "cuervo": "🐦", "cucaracha": "🪳", "buho": "🦉",
+      "camaron": "🦐", "hamster": "🐹", "buey": "🐂", "cabra": "🐐",
+      "erizo de mar": "🦔", "anguila": "🐍", "huron": "🦡", "morrocoy": "🐢",
+      "cisne": "🦢", "gaviota": "🐦", "paujil": "🦃", "escarabajo": "🪲",
+      "caballito de mar": "🧜", "loro": "🦜", "cocodrilo": "🐊", "guacharito": "🐦"
+    };
+
+    // Mapeo inverso e identificadores alternativos
+    const ANIMAL_NUMEROS = {
+      "00": "ballena", "0": "delfin", "01": "carnero", "02": "toro", 
+      "03": "ciempies", "04": "alacran", "05": "leon", "06": "rana", 
+      "07": "perico", "08": "raton", "09": "aguila", "10": "tigre", 
+      "11": "gato", "12": "caballo", "13": "mono", "14": "paloma", 
+      "15": "zorro", "16": "oso", "17": "pavo", "18": "burro", 
+      "19": "chivo", "20": "cochino", "21": "gallo", "22": "camello", 
+      "23": "cebra", "24": "iguana", "25": "gallina", "26": "vaca", 
+      "27": "perro", "28": "zamuro", "29": "elefante", "30": "caiman", 
+      "31": "lapa", "32": "ardilla", "33": "pescado", "34": "venado", 
+      "35": "jirafa", "36": "culebra",
+      
+      "37": "tortuga", "38": "bufalo", "39": "lechuza", "40": "avispa",
+      "41": "canguro", "42": "tucan", "43": "mariposa", "44": "chiguire",
+      "45": "garza", "46": "puma", "47": "pavo real", "48": "puercoespin",
+      "49": "pereza", "50": "canario", "51": "pelicano", "52": "pulpo",
+      "53": "caracol", "54": "grillo", "55": "oso hormiguero", "56": "tiburon",
+      "57": "pato", "58": "hormiga", "59": "pantera", "60": "camaleon",
+      "61": "panda", "62": "cachicamo", "63": "cangrejo", "64": "gavilan",
+      "65": "arana", "66": "lobo", "67": "avestruz", "68": "jaguar",
+      "69": "conejo", "70": "bisonte", "71": "guacamaya", "72": "gorila",
+      "73": "hipopotamo", "74": "turpial", "75": "guacharo",
+      "76": "rinoceronte", "77": "pinguino", "78": "antilope", "79": "calamar",
+      "80": "murcielago", "81": "cuervo", "82": "cucaracha", "83": "buho",
+      "84": "camaron", "85": "hamster", "86": "buey", "87": "cabra",
+      "88": "erizo de mar", "89": "anguila", "90": "huron", "91": "morrocoy",
+      "92": "cisne", "93": "gaviota", "94": "paujil", "95": "escarabajo",
+      "96": "caballito de mar", "97": "loro", "98": "cocodrilo", "99": "guacharito"
+    };
+
+    // Helper para obtener fecha en Caracas
+    function getCaracasDate(offsetDays = 0) {
+      const d = new Date();
+      if (offsetDays !== 0) {
+        d.setDate(d.getDate() - offsetDays);
+      }
+      try {
+        const formatter = new Intl.DateTimeFormat('sv', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' });
+        return formatter.format(d);
+      } catch (e) {
+        // Fallback local en caso de error
+        const local = new Date(d.getTime() - (4 * 60 * 60 * 1000)); // Restar aprox 4 horas
+        return local.toISOString().split('T')[0];
+      }
+    }
+
+    // Traducir nombre de lotería a clase css/filtro
+    function getLotteryClass(name) {
+      if (!name) return 'lotto';
+      const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      if (n.includes('guacharito') || n.includes('guararito')) return 'guacharito';
+      if (n.includes('guacharo')) return 'guacharo';
+      if (n.includes('selva')) return 'selva';
+      if (n.includes('granja') || n.includes('granjita')) return 'granja';
+      if (n.includes('lotto') || n.includes('activo')) return 'lotto';
+      return 'lotto';
+    }
+
+    // Traducir nombre de lotería legible
+    function formatLotteryName(name) {
+      if (!name) return '';
+      const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      if (n.includes('lotto')) return 'Lotto Activo';
+      if (n.includes('granja') || n.includes('granjita')) return 'La Granjita';
+      if (n.includes('guacharito') || n.includes('guararito')) return 'El Guacharito';
+      if (n.includes('guacharo')) return 'Guácharo Activo';
+      if (n.includes('selva')) return 'Selva Plus';
+      return name;
+    }
+
+    // Parsear hora en minutos para ordenar los sorteos de forma secuencial (09:00am -> 540)
+    function parseTimeToMinutes(h) {
+      const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+      if (!matches) return 0;
+      let hr = parseInt(matches[1], 10);
+      const min = parseInt(matches[2], 10);
+      const meridiano = matches[3].toLowerCase();
+      if (meridiano === 'pm' && hr < 12) hr += 12;
+      if (meridiano === 'am' && hr === 12) hr = 0;
+      return hr * 60 + min;
+    }
+
+    // Extraer nombre del animal y número de un resultado (ej: "10" o "rana (#06)")
+    function parseResultado(res) {
+      if (!res) return { animal: '', numero: '' };
+      
+      let numero = '';
+      let animal = '';
+      const limpio = res.toString().trim();
+
+      // Si es solo un número (ej. "10" o "0" o "00")
+      if (/^\d+$/.test(limpio)) {
+        numero = limpio;
+        // Asegurar padding de dos dígitos excepto para "0" y "00"
+        let padded = numero.padStart(2, '0');
+        if (numero === "0" || numero === "00") padded = numero;
+        
+        if (ANIMAL_NUMEROS[padded]) {
+          animal = ANIMAL_NUMEROS[padded];
+          numero = padded;
+        } else {
+          animal = 'Desconocido';
+        }
+      } else {
+        // Formato con texto (ej: "tigre (#10)" o "10 - tigre")
+        const numMatch = limpio.match(/#(\d+)/);
+        numero = numMatch ? numMatch[1] : '';
+        
+        // Intentar limpiar
+        animal = limpio.replace(/#\d+/, '').replace(/[()]/g, '').trim().toLowerCase();
+        
+        // Si no se encuentra animal o es un número remanente
+        if (/^\d+$/.test(animal)) {
+          let padded = animal.padStart(2, '0');
+          if (animal === "0" || animal === "00") padded = animal;
+          if (ANIMAL_NUMEROS[padded]) {
+            animal = ANIMAL_NUMEROS[padded];
+            numero = padded;
+          }
+        } else if (!animal && numero && ANIMAL_NUMEROS[numero]) {
+          animal = ANIMAL_NUMEROS[numero];
+        }
+      }
+      
+      return { animal, numero };
+    }
+
+    // Cargar datos de la API
+    async function fetchSorteos() {
+      const indicator = document.getElementById('refresh-indicator');
+      const timerText = document.getElementById('timer-text');
+      const statusDot = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+      
+      indicator.style.display = 'inline-block';
+      timerText.textContent = 'Actualizando resultados...';
+
+      try {
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error('Servidor fuera de línea');
+        
+        const data = await response.json();
+        allSorteos = Array.isArray(data) ? data : [];
+        
+        // Guardar en localStorage para sincronización
+        try {
+          localStorage.setItem('betagama_allSorteos', JSON.stringify(allSorteos));
+        } catch(e){}
+        
+        statusDot.className = 'status-dot online';
+        statusText.textContent = 'En línea';
+        
+        renderResults();
+        
+        countdown = POLLING_INTERVAL;
+        startTimer();
+      } catch (err) {
+        console.error('Error al obtener sorteos:', err);
+        statusDot.className = 'status-dot offline';
+        statusText.textContent = 'Desconectado';
+        
+        // Si no tenemos sorteos cargados previamente, mostrar vista de error
+        if (allSorteos.length === 0) {
+          renderErrorState(err.message);
+        } else {
+          timerText.textContent = 'Error al actualizar. Reintentando en 10s...';
+          countdown = 10;
+          startTimer();
+        }
+      } finally {
+        indicator.style.display = 'none';
+      }
+    }
+
+    // Temporizador
+    function startTimer() {
+      if (pollingTimer) clearInterval(pollingTimer);
+      
+      const timerText = document.getElementById('timer-text');
+      
+      pollingTimer = setInterval(() => {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(pollingTimer);
+          fetchSorteos();
+        } else {
+          timerText.textContent = `Próxima actualización en ${countdown} segundos`;
+        }
+      }, 1000);
+    }
+
+    // Alternar entre Hoy y Ayer
+    function changeDay(day) {
+      currentDay = day;
+      document.getElementById('tab-hoy').className = day === 'hoy' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById('tab-ayer').className = day === 'ayer' ? 'tab-btn active' : 'tab-btn';
+      try {
+        localStorage.setItem('betagama_currentDay', day);
+      } catch(e){}
+      renderResults();
+    }
+
+    // Filtrar por lotería
+    function filterLottery(lottery) {
+      currentLotteryFilter = lottery;
+      const chips = document.querySelectorAll('.chip');
+      chips.forEach(c => {
+        if (c.getAttribute('data-lottery') === lottery) {
+          c.className = 'chip active';
+        } else {
+          c.className = 'chip';
+        }
+      });
+      try {
+        localStorage.setItem('betagama_currentLotteryFilter', lottery);
+      } catch(e){}
+      renderResults();
+    }
+
+    // Manejar buscador
+    function handleSearch() {
+      searchQuery = document.getElementById('search').value.toLowerCase().trim();
+      try {
+        localStorage.setItem('betagama_searchQuery', searchQuery);
+      } catch(e){}
+      renderResults();
+    }
+
+    // Renderizar resultados filtrados
+    function renderResults() {
+      const container = document.getElementById('results-container');
+      
+      // 1. Obtener la fecha del día correspondiente en Caracas
+      const targetDate = getCaracasDate(currentDay === 'hoy' ? 0 : 1);
+      
+      // 2. Filtrar por fecha
+      let filtrados = allSorteos.filter(s => s.fecha === targetDate && s.resultado);
+
+      // 3. Filtrar por lotería
+      if (currentLotteryFilter !== 'todas') {
+        filtrados = filtrados.filter(s => {
+          const lClass = getLotteryClass(s.loteria);
+          return lClass === currentLotteryFilter;
+        });
+      }
+
+      // 4. Filtrar por búsqueda de texto
+      if (searchQuery) {
+        filtrados = filtrados.filter(s => {
+          const parsed = parseResultado(s.resultado);
+          return (
+            s.hora.toLowerCase().includes(searchQuery) ||
+            parsed.animal.includes(searchQuery) ||
+            parsed.numero.includes(searchQuery)
+          );
+        });
+      }
+
+      // Si no hay resultados
+      if (filtrados.length === 0) {
+        stopTVRotation();
+        renderEmptyState(targetDate);
+        return;
+      }
+
+      // 5. Agrupar por loterías en orden
+      const grupos = {};
+      filtrados.forEach(s => {
+        const lotKey = formatLotteryName(s.loteria);
+        if (!grupos[lotKey]) grupos[lotKey] = [];
+        grupos[lotKey].push(s);
+      });
+
+      container.innerHTML = '';
+
+      // Ordenar loterías alfabéticamente
+      const loteriasOrdenadas = Object.keys(grupos).sort();
+
+      loteriasOrdenadas.forEach(lotName => {
+        const section = document.createElement('div');
+        section.className = 'lottery-section';
+
+        const lotClass = getLotteryClass(lotName);
+
+        // Crear barra de título con switch de rotación de TV
+        section.innerHTML = `
+          <div class="lottery-title-bar" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div class="lottery-indicator-bar ${lotClass}"></div>
+              <h2 class="lottery-name">${lotName}</h2>
+            </div>
+            <div class="tv-toggle-container" style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-transform: uppercase; letter-spacing: 0.5px;">Rotar en TV:</span>
+              <label class="switch-label">
+                <input type="checkbox" class="tv-rotation-checkbox" data-lottery-key="${lotClass}" onchange="toggleTVLottery('${lotClass}', this.checked)" ${isTVLotteryEnabled(lotClass) ? 'checked' : ''}>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+        `;
+
+        // Ordenar sorteos de la lotería por horario cronológico
+        const sorteosOrdenados = grupos[lotName].sort((a, b) => parseTimeToMinutes(a.hora) - parseTimeToMinutes(b.hora));
+
+        // Crear contenedor para las tarjetas
+        const grid = document.createElement('div');
+        grid.className = 'results-grid';
+        if (sorteosOrdenados.length > 8) {
+          grid.classList.add('compact-grid');
+        }
+
+        sorteosOrdenados.forEach(s => {
+          const parsed = parseResultado(s.resultado);
+          const emoji = ANIMAL_EMOJIS[parsed.animal] || '🐾';
+          
+          // Rutas de imagen local (directamente en la raíz de resultados_app)
+          const num = parsed.numero;
+          const imgUrlPng = `${lotClass}/${num}.png`;
+          const imgUrlWebp = `${lotClass}/${num}.webp`;
+
+          const card = document.createElement('div');
+          card.className = `result-card ${lotClass}`;
+          card.innerHTML = `
+            <div class="card-hour">${s.hora}</div>
+            <div class="card-emoji-container" style="display: flex; justify-content: center; align-items: center; overflow: hidden; padding: 4px;">
+              <img src="${imgUrlPng}" alt="${parsed.animal}" 
+                   onerror="this.onerror = () => {
+                     const singleNum = ('${num}'.startsWith('0') && '${num}'.length === 2 && '${num}' !== '00') ? '${num}'.substring(1) : '';
+                     if (singleNum) {
+                       this.onerror = () => {
+                         this.style.display = 'none';
+                         if (this.nextElementSibling) this.nextElementSibling.style.display = 'block';
+                       };
+                       this.src = '${lotClass}/' + singleNum + '.webp';
+                     } else {
+                       this.style.display = 'none';
+                       if (this.nextElementSibling) this.nextElementSibling.style.display = 'block';
+                     }
+                   }; this.src = '${imgUrlWebp}';" 
+                   style="width: 100%; height: 100%; object-fit: contain; border-radius: 50%;" />
+              <span style="display: none; font-size: inherit;">${emoji}</span>
+            </div>
+            <div class="card-animal-name">${parsed.animal || 'Desconocido'}</div>
+            <div class="card-animal-number">#${parsed.numero || '--'}</div>
+          `;
+          grid.appendChild(card);
+        });
+
+        section.appendChild(grid);
+        container.appendChild(section);
+      });
+
+      // Inicializar o recargar rotador en Modo TV
+      if (document.body.classList.contains('tv-mode')) {
+        initTVRotation();
+        setTimeout(adjustTVLayout, 100);
+      }
+    }
+
+    // Renderizar vistas vacías
+    function renderEmptyState(date) {
+      const container = document.getElementById('results-container');
+      const displayDate = date.split('-').reverse().join('/');
+      container.innerHTML = `
+        <div class="state-container">
+          <div class="state-icon">📭</div>
+          <div class="state-title">No hay resultados disponibles</div>
+          <div class="state-desc">No se encontraron sorteos registrados para la fecha <strong>${displayDate}</strong> ${currentLotteryFilter !== 'todas' ? 'con el filtro seleccionado' : ''}. El scraper podría estar buscando nuevos resultados en breve.</div>
+        </div>
+      `;
+    }
+
+    // Renderizar error
+    function renderErrorState(msg) {
+      const container = document.getElementById('results-container');
+      container.innerHTML = `
+        <div class="state-container" style="border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.03); max-width: 500px; margin: 2rem auto; padding: 2rem;">
+          <div class="state-icon" style="color: #ef4444; font-size: 2.5rem; margin-bottom: 1rem;">⚠️</div>
+          <div class="state-title" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">Error de Conexión</div>
+          <div class="state-desc" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+            No pudimos comunicarnos con el servidor de resultados. Verifica que la PC principal esté encendida y ejecutando el bot.<br><br>
+            <span style="font-size: 0.75rem; color: #ef4444;">Detalle: ${msg}</span>
+          </div>
+          
+          <div style="background: rgba(0, 0, 0, 0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; text-align: left;">
+            <label style="display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">IP de la PC Principal:</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="custom-server-ip-input" placeholder="Ej: 192.168.1.15" style="
+                flex: 1;
+                padding: 0.5rem 0.75rem;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                outline: none;
+                font-family: inherit;
+                font-size: 0.9rem;
+              ">
+              <button onclick="saveCustomServerIP()" style="
+                background: var(--color-primary);
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 8px;
+                font-family: inherit;
+                font-size: 0.85rem;
+                font-weight: 700;
+                cursor: pointer;
+              ">Guardar</button>
+            </div>
+            <span style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem;">Si corres la app en la misma PC, deja este campo vacío.</span>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; justify-content: center;">
+            <button class="chip active" onclick="fetchSorteos()">Intentar reconectar</button>
+            <button class="chip" onclick="clearCustomServerIP()" style="background: rgba(0, 0, 0, 0.05); color: var(--text-main); border: 1px solid var(--border-color);">Restablecer</button>
+          </div>
+        </div>
+      `;
+      
+      // Auto-rellenar input con la IP guardada
+      try {
+        const saved = localStorage.getItem('betagama_server_ip_raw') || '';
+        const input = document.getElementById('custom-server-ip-input');
+        if (input) input.value = saved;
+      } catch(e){}
+    }
+
+    function saveCustomServerIP() {
+      const val = document.getElementById('custom-server-ip-input').value.trim();
+      try {
+        if (val) {
+          localStorage.setItem('betagama_server_ip_raw', val);
+          localStorage.setItem('betagama_server_ip', `http://${val}:5000`);
+        } else {
+          localStorage.removeItem('betagama_server_ip_raw');
+          localStorage.removeItem('betagama_server_ip');
+        }
+        updateAPIUrl();
+        fetchSorteos();
+      } catch(e){}
+    }
+
+    function clearCustomServerIP() {
+      try {
+        localStorage.removeItem('betagama_server_ip_raw');
+        localStorage.removeItem('betagama_server_ip');
+        const input = document.getElementById('custom-server-ip-input');
+        if (input) input.value = '';
+        updateAPIUrl();
+        fetchSorteos();
+      } catch(e){}
+    }
+
+    function updateAPIUrl() {
+      let base = '';
+      try {
+        base = localStorage.getItem('betagama_server_ip');
+      } catch(e){}
+      
+      if (!base) {
+        const hostname = window.location.hostname;
+        if (window.location.protocol === 'file:') {
+          base = 'https://betagama-bot-production.up.railway.app';
+        } else if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+          base = window.location.origin;
+        } else {
+          base = 'https://betagama-bot-production.up.railway.app';
+        }
+      }
+      
+      API_BASE = base;
+      API_URL = `${API_BASE}/api/sorteos`;
+    }
+
+    // Alternar Pantalla Completa (TV)
+    function toggleTVMode() {
+      if (isTVUrl) {
+        // En la ventana TV secundaria, "Salir de TV" cierra la ventana
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+        stopTVRotation();
+        window.close();
+        return;
+      }
+      
+      // Intentar posicionar automáticamente en la segunda pantalla (a la derecha)
+      const primaryWidth = window.screen.width || 1920;
+      const primaryHeight = window.screen.height || 1080;
+      
+      const popup = window.open(
+        'index.html?tv=true', 
+        'BetagamaTV', 
+        `width=${primaryWidth},height=${primaryHeight},left=${primaryWidth},top=0,menubar=no,toolbar=no,location=no,status=no`
+      );
+      
+      if (popup) {
+        popup.focus();
+      } else {
+        alert("⚠️ Por favor, permite las ventanas emergentes (popups) en este sitio para abrir la pantalla de TV.");
+      }
+    }
+
+    // Escuchar el cambio de pantalla completa del navegador (si el usuario presiona ESC)
+    const handleFullscreenExit = () => {
+      const isFullscreen = document.fullscreenElement || 
+                            document.webkitFullscreenElement || 
+                            document.mozFullScreenElement || 
+                            document.msFullscreenElement;
+      if (!isFullscreen) {
+        document.body.classList.remove('tv-mode');
+        stopTVRotation();
+      }
+      checkFullscreenState();
+      setTimeout(adjustTVLayout, 100);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenExit);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenExit);
+    document.addEventListener('mozfullscreenchange', handleFullscreenExit);
+    document.addEventListener('MSFullscreenChange', handleFullscreenExit);
+
+    // Solicitar pantalla completa nativa del navegador al hacer clic en el overlay
+    function requestTVFullscreen() {
+      const docEl = document.documentElement;
+      const requestFS = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+      if (requestFS) {
+        requestFS.call(docEl)
+          .then(() => {
+            const overlay = document.getElementById('tv-activation-overlay');
+            if (overlay) overlay.style.display = 'none';
+            setTimeout(adjustTVLayout, 100);
+          })
+          .catch((err) => {
+            console.error('Error al solicitar pantalla completa:', err);
+          });
+      }
+    }
+
+    // Mostrar/ocultar el overlay según el estado de pantalla completa
+    function checkFullscreenState() {
+      if (!isTVUrl) return;
+      const isFullscreen = document.fullscreenElement || 
+                            document.webkitFullscreenElement || 
+                            document.mozFullScreenElement || 
+                            document.msFullscreenElement;
+      const overlay = document.getElementById('tv-activation-overlay');
+      if (overlay) {
+        overlay.style.display = isFullscreen ? 'none' : 'flex';
+      }
+    }
+
+    // Escuchar eventos de redimensión para ajustar el contenido dinámicamente
+    window.addEventListener('resize', () => {
+      setTimeout(adjustTVLayout, 50);
+    });
+
+    // Ajustar el contenido dinámicamente usando escala CSS transform
+    function adjustTVLayout() {
+      if (!document.body.classList.contains('tv-mode')) return;
+      
+      const main = document.querySelector('main');
+      if (!main) return;
+      
+      // 1. Restaurar valores por defecto para poder medir el tamaño real del contenido
+      main.style.transform = 'none';
+      main.style.width = '100%';
+      main.style.height = 'auto';
+      main.style.padding = '2.5rem 5rem';
+      
+      // 2. Obtener la sección de lotería activa
+      const activeSection = main.querySelector('.lottery-section.active-tv');
+      if (!activeSection) return;
+      
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // Medir el contenido requerido (sección + espacio para el título y barra de progreso)
+      const requiredHeight = activeSection.scrollHeight + 120; // 120px de margen de seguridad
+      const requiredWidth = activeSection.scrollWidth + 160; // 160px de margen de seguridad
+      
+      let scaleY = 1;
+      let scaleX = 1;
+      
+      if (requiredHeight > viewportHeight) {
+        scaleY = viewportHeight / requiredHeight;
+      }
+      if (requiredWidth > viewportWidth) {
+        scaleX = viewportWidth / requiredWidth;
+      }
+      
+      // Tomar el menor factor de escala para asegurar que quepa tanto a lo alto como a lo ancho
+      const scale = Math.min(scaleX, scaleY, 1);
+      
+      if (scale < 1) {
+        // Reducir el padding proporcionalmente para ganar más espacio
+        const newPaddingTopBottom = Math.max(1, 2.5 * scale);
+        const newPaddingLeftRight = Math.max(2, 5 * scale);
+        main.style.padding = `${newPaddingTopBottom}rem ${newPaddingLeftRight}rem`;
+        
+        main.style.transform = `scale(${scale})`;
+        main.style.transformOrigin = 'top center';
+        main.style.width = `${100 / scale}%`;
+        main.style.height = `${100 / scale}%`;
+      }
+    }
+
+    // Auto-ocultar el botón de salida en Modo TV por inactividad del mouse (3 segundos)
+    let mouseTimer;
+    document.addEventListener('mousemove', () => {
+      if (document.body.classList.contains('tv-mode')) {
+        const btn = document.getElementById('exit-tv-btn');
+        if (btn) {
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+        }
+        clearTimeout(mouseTimer);
+        mouseTimer = setTimeout(() => {
+          if (btn) {
+            btn.style.opacity = '0';
+            btn.style.pointerEvents = 'none';
+          }
+        }, 3000);
+      }
+    });
+
+    // Cambiar el tiempo de rotación dinámicamente
+    function changeRotationTime(seconds) {
+      TV_ROTATION_INTERVAL = parseInt(seconds, 10);
+      try {
+        localStorage.setItem('betagama_rotation_interval', seconds);
+      } catch(e){}
+      
+      // Si el Modo TV está activo, reiniciar la rotación inmediatamente con el nuevo tiempo
+      if (document.body.classList.contains('tv-mode')) {
+        initTVRotation();
+      }
+    }
+
+    // ==========================================================================
+    // LÓGICA DE ROTACIÓN DE LOTERÍAS EN PANTALLA COMPLETA
+    // ==========================================================================
+    function initTVRotation() {
+      // Detener cualquier rotación previa
+      stopTVRotation();
+
+      const allSections = document.querySelectorAll('.lottery-section');
+      const sections = [];
+
+      allSections.forEach(sec => {
+        // Encontrar la clase de lotería (lotto, granja, guacharo, selva, guacharito)
+        let lotClass = '';
+        const card = sec.querySelector('.result-card');
+        if (card) {
+          if (card.classList.contains('lotto')) lotClass = 'lotto';
+          else if (card.classList.contains('granja')) lotClass = 'granja';
+          else if (card.classList.contains('guacharo')) lotClass = 'guacharo';
+          else if (card.classList.contains('selva')) lotClass = 'selva';
+          else if (card.classList.contains('guacharito')) lotClass = 'guacharito';
+        }
+        
+        if (!lotClass) {
+          const indicator = sec.querySelector('.lottery-indicator-bar');
+          if (indicator) {
+            if (indicator.classList.contains('lotto')) lotClass = 'lotto';
+            else if (indicator.classList.contains('granja')) lotClass = 'granja';
+            else if (indicator.classList.contains('guacharo')) lotClass = 'guacharo';
+            else if (indicator.classList.contains('selva')) lotClass = 'selva';
+            else if (indicator.classList.contains('guacharito')) lotClass = 'guacharito';
+          }
+        }
+
+        const isForceShown = (currentLotteryFilter !== 'todas' && currentLotteryFilter === lotClass);
+
+        if (lotClass && (tvEnabledLotteries.includes(lotClass) || isForceShown)) {
+          sections.push(sec);
+          sec.style.display = ''; // asegurar que sea visible en TV
+        } else {
+          sec.classList.remove('active-tv');
+          sec.style.display = 'none'; // ocultar secciones no habilitadas en TV
+        }
+      });
+
+      if (sections.length === 0) {
+        document.getElementById('tv-progress-bar').style.width = '0%';
+        return;
+      }
+
+      // Si solo hay una lotería disponible con resultados, no es necesario rotar
+      if (sections.length === 1) {
+        sections[0].classList.add('active-tv');
+        sections[0].style.display = ''; // asegurar que sea visible en TV
+        document.getElementById('tv-progress-bar').style.width = '100%';
+        setTimeout(adjustTVLayout, 100);
+        return;
+      }
+
+      let currentTVIndex = 0;
+
+      // Función para mostrar una sección en específico
+      const showSection = (index) => {
+        sections.forEach((sec, idx) => {
+          if (idx === index) {
+            sec.classList.add('active-tv');
+          } else {
+            sec.classList.remove('active-tv');
+          }
+        });
+        // Adaptar el diseño a la nueva sección
+        setTimeout(adjustTVLayout, 50);
+      };
+
+      // Mostrar la primera sección al iniciar
+      showSection(currentTVIndex);
+      
+      tvSecondsElapsed = 0;
+      const tickRate = 100; // ms
+      const totalTicks = (TV_ROTATION_INTERVAL * 1000) / tickRate;
+
+      tvProgressTimer = setInterval(() => {
+        tvSecondsElapsed += (tickRate / 1000);
+        const percent = (tvSecondsElapsed / TV_ROTATION_INTERVAL) * 100;
+        document.getElementById('tv-progress-bar').style.width = `${percent}%`;
+
+        if (tvSecondsElapsed >= TV_ROTATION_INTERVAL) {
+          tvSecondsElapsed = 0;
+          currentTVIndex = (currentTVIndex + 1) % sections.length;
+          showSection(currentTVIndex);
+        }
+      }, tickRate);
+    }
+
+    function stopTVRotation() {
+      if (tvProgressTimer) {
+        clearInterval(tvProgressTimer);
+        tvProgressTimer = null;
+      }
+      tvSecondsElapsed = 0;
+      document.getElementById('tv-progress-bar').style.width = '0%';
+      
+      // Asegurarse de que todas las secciones vuelvan a ser visibles fuera del Modo TV
+      const sections = document.querySelectorAll('.lottery-section');
+      sections.forEach(sec => {
+        sec.classList.remove('active-tv');
+        sec.style.display = '';
+      });
+    }
+
+    // --- LÓGICA DE MODAL DE CONTROL DE RIESGOS ---
+    function openRiesgosModal() {
+      document.getElementById('riesgos-modal').classList.add('active');
+      cargarRiesgosModal();
+    }
+
+    function closeRiesgosModal() {
+      document.getElementById('riesgos-modal').classList.remove('active');
+    }
+
+    function handleOverlayClick(event) {
+      if (event.target.id === 'riesgos-modal') {
+        closeRiesgosModal();
+      }
+    }
+
+    async function cargarRiesgosModal() {
+      const select = document.getElementById('riesgos-loteria-select');
+      const targetLot = select.value;
+      const contentDiv = document.getElementById('riesgos-modal-body-content');
+      
+      contentDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="spinner" style="margin: 0 auto 1rem;"></div>Cargando riesgos...</div>';
+
+      try {
+        const url = `${API_BASE}/api/configuracion/riesgos?loteria=${targetLot}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al cargar datos del servidor');
+        
+        const data = await response.json();
+        
+        // Renderizar contenido
+        let html = '';
+
+        // 1. Configuración General de la Lotería
+        html += `
+          <div style="background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.05); padding: 0.8rem 1rem; border-radius: 10px; margin-bottom: 1.2rem;">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; font-size: 0.85rem;">
+              <div>⚡ <strong>Auto-limitar calientes:</strong> ${data.autoLimitarCalientes ? '✅ Activo' : '❌ Inactivo'}</div>
+              <div>📉 <strong>Límite para calientes:</strong> ${(data.porcentajeLimitaCalientes * 100).toFixed(0)}% del cupo</div>
+              <div>👥 <strong>Multiplicador cupo colectivo:</strong> ${data.factorCupoColectivo}x</div>
+              <div>🧬 <strong>Régimen Cuántico Activo:</strong> <span style="color: var(--color-primary); font-weight: bold;">${(data.cuantico && data.cuantico.regimen_detectado) || 'NINGUNO'}</span></div>
+            </div>
+          </div>
+        `;
+
+        // 2. Animales Bloqueados
+        html += `<div class="riesgo-section-title">🚫 Animales Bloqueados (Límite Bs. 0)</div>`;
+        const blockedList = data.animalesBloqueados || [];
+        if (blockedList.length === 0) {
+          html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay animales bloqueados para hoy.</p>`;
+        } else {
+          html += `<div class="blocked-animal-grid">`;
+          blockedList.forEach(num => {
+            const name = ANIMAL_NUMEROS[num] || 'Desconocido';
+            const emoji = ANIMAL_EMOJIS[name] || '🐾';
+            html += `
+              <div class="blocked-animal-badge">
+                <span style="font-size: 1.2rem;">${emoji}</span>
+                <div>
+                  <strong style="display: block; font-size: 0.8rem; color: var(--text-main);">${name.toUpperCase()}</strong>
+                  <span style="font-size: 0.72rem; color: #ef4444;">#${num} (Bs. 0)</span>
+                </div>
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        // 3. Límites específicos en Bolívares
+        html += `<div class="riesgo-section-title">💸 Límites Específicos por Animal (Bs.)</div>`;
+        const specificLimits = data.limitesEspecificos || {};
+        const limitEntries = Object.entries(specificLimits).filter(([num, limit]) => limit !== null && limit !== undefined && limit !== '');
+        if (limitEntries.length === 0) {
+          html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay límites específicos configurados.</p>`;
+        } else {
+          html += `<div class="blocked-animal-grid">`;
+          limitEntries.forEach(([num, limit]) => {
+            const name = ANIMAL_NUMEROS[num] || 'Desconocido';
+            const emoji = ANIMAL_EMOJIS[name] || '🐾';
+            html += `
+              <div class="blocked-animal-badge" style="background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.2);">
+                <span style="font-size: 1.2rem;">${emoji}</span>
+                <div>
+                  <strong style="display: block; font-size: 0.8rem; color: var(--text-main);">${name.toUpperCase()}</strong>
+                  <span style="font-size: 0.72rem; color: #2563eb;">#${num} ➔ Bs. ${parseFloat(limit).toLocaleString('de-DE')}</span>
+                </div>
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        // 4. Animales Calientes (Top 5 más salidores)
+        html += `<div class="riesgo-section-title">🔥 Animales Calientes (Auto-limitados)</div>`;
+        const hotList = data.calientes || [];
+        if (hotList.length === 0) {
+          html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay estadísticas de calientes registradas en los sorteos recientes.</p>`;
+        } else {
+          html += `<div class="stat-list">`;
+          hotList.forEach(num => {
+            const name = ANIMAL_NUMEROS[num] || 'Desconocido';
+            const emoji = ANIMAL_EMOJIS[name] || '🐾';
+            html += `
+              <span class="stat-badge caliente">
+                <span>${emoji}</span>
+                <strong>${name} #${num}</strong>
+              </span>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        // 5. Animales Atrasados (Top 5 con mayor retraso)
+        html += `<div class="riesgo-section-title">❄️ Animales Fríos / Atrasados</div>`;
+        const coldList = data.atrasados || [];
+        if (coldList.length === 0) {
+          html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay estadísticas de atrasados registradas.</p>`;
+        } else {
+          html += `<div class="stat-list">`;
+          coldList.forEach(num => {
+            const name = ANIMAL_NUMEROS[num] || 'Desconocido';
+            const emoji = ANIMAL_EMOJIS[name] || '🐾';
+            html += `
+              <span class="stat-badge atrasado">
+                <span>${emoji}</span>
+                <strong>${name} #${num}</strong>
+              </span>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        contentDiv.innerHTML = html;
+      } catch (err) {
+        console.error('Error al cargar modal de riesgos:', err);
+        contentDiv.innerHTML = `<div style="text-align: center; padding: 2rem; color: #ef4444;">❌ Error: ${err.message}</div>`;
+      }
+    }
+
+    // Sincronizar datos y filtros con la ventana principal (opener) o localStorage cada 500ms
+    function sincronizarConOpener() {
+      let synced = false;
+
+      // 1. Intentar sincronización directa mediante window.opener (si no está bloqueado por CORS/Seguridad)
+      try {
+        if (window.opener && !window.opener.closed && window.opener.allSorteos !== undefined) {
+          let changed = false;
+          
+          if (currentDay !== window.opener.currentDay) {
+            currentDay = window.opener.currentDay;
+            changed = true;
+            
+            // Sincronizar visualmente las pestañas locales por si se sale del modo TV
+            const tabHoy = document.getElementById('tab-hoy');
+            const tabAyer = document.getElementById('tab-ayer');
+            if (tabHoy && tabAyer) {
+              tabHoy.className = currentDay === 'hoy' ? 'tab-btn active' : 'tab-btn';
+              tabAyer.className = currentDay === 'ayer' ? 'tab-btn active' : 'tab-btn';
+            }
+          }
+          if (currentLotteryFilter !== window.opener.currentLotteryFilter) {
+            currentLotteryFilter = window.opener.currentLotteryFilter;
+            changed = true;
+          }
+          if (searchQuery !== window.opener.searchQuery) {
+            searchQuery = window.opener.searchQuery;
+            changed = true;
+          }
+          if (allSorteos !== window.opener.allSorteos) {
+            allSorteos = window.opener.allSorteos;
+            changed = true;
+          }
+          
+          if (changed) {
+            renderResults();
+          }
+          synced = true;
+        }
+      } catch (e) {
+        // Ignorar error de acceso a window.opener por CORS/file://
+      }
+
+      // 2. Intentar sincronización de filtros y datos mediante localStorage
+      if (!synced) {
+        try {
+          const localDay = localStorage.getItem('betagama_currentDay') || 'hoy';
+          const localFilter = localStorage.getItem('betagama_currentLotteryFilter') || 'todas';
+          const localSearch = localStorage.getItem('betagama_searchQuery') || '';
+          const localSorteosStr = localStorage.getItem('betagama_allSorteos');
+          
+          const localInterval = localStorage.getItem('betagama_rotation_interval');
+          if (localInterval) {
+            const parsedInterval = parseInt(localInterval, 10);
+            if (TV_ROTATION_INTERVAL !== parsedInterval) {
+              TV_ROTATION_INTERVAL = parsedInterval;
+              if (document.body.classList.contains('tv-mode')) {
+                initTVRotation();
+              }
+              const rotSelect = document.getElementById('rotation-time-select');
+              if (rotSelect) {
+                rotSelect.value = TV_ROTATION_INTERVAL.toString();
+              }
+            }
+          }
+
+          const localTVLotteriesStr = localStorage.getItem('betagama_tv_enabled_lotteries');
+          if (localTVLotteriesStr) {
+            try {
+              const parsed = JSON.parse(localTVLotteriesStr);
+              if (JSON.stringify(tvEnabledLotteries) !== JSON.stringify(parsed)) {
+                tvEnabledLotteries = parsed;
+                if (document.body.classList.contains('tv-mode')) {
+                  initTVRotation();
+                }
+              }
+            } catch(e){}
+          }
+
+          let localSorteos = [];
+          if (localSorteosStr) {
+            try {
+              localSorteos = JSON.parse(localSorteosStr);
+            } catch(e){}
+          }
+
+          let changed = false;
+
+          if (currentDay !== localDay) {
+            currentDay = localDay;
+            changed = true;
+            const tabHoy = document.getElementById('tab-hoy');
+            const tabAyer = document.getElementById('tab-ayer');
+            if (tabHoy && tabAyer) {
+              tabHoy.className = currentDay === 'hoy' ? 'tab-btn active' : 'tab-btn';
+              tabAyer.className = currentDay === 'ayer' ? 'tab-btn active' : 'tab-btn';
+            }
+          }
+          if (currentLotteryFilter !== localFilter) {
+            currentLotteryFilter = localFilter;
+            changed = true;
+          }
+          if (searchQuery !== localSearch) {
+            searchQuery = localSearch;
+            changed = true;
+          }
+          
+          // Comparar longitud y contenido de sorteos
+          const sorteosChanged = JSON.stringify(allSorteos) !== JSON.stringify(localSorteos);
+          if (sorteosChanged) {
+            allSorteos = localSorteos;
+            changed = true;
+          }
+
+          if (changed) {
+            renderResults();
+          }
+          
+          if (allSorteos.length > 0) {
+            synced = true;
+          }
+        } catch (e) {
+          // Ignorar error de localStorage
+        }
+      }
+
+      // 3. Fallback absoluto: Carga autónoma desde la API si no pudimos sincronizar nada
+      if (!synced && !pollingTimer) {
+        fetchSorteos();
+      }
+    }
+
+    // Inicializar
+    window.onload = () => {
+      // Sincronizar el selector de tiempo de rotación con el valor guardado
+      const rotSelect = document.getElementById('rotation-time-select');
+      if (rotSelect) {
+        rotSelect.value = TV_ROTATION_INTERVAL.toString();
+      }
+
+      if (isTVUrl) {
+        document.body.classList.add('tv-mode');
+        
+        // Registrar evento de click para forzar pantalla completa en la ventana secundaria
+        document.addEventListener('click', () => {
+          const docEl = document.documentElement;
+          if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+            const requestFS = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (requestFS) requestFS.call(docEl).catch(() => {});
+          }
+        });
+
+        // Intentar pantalla completa automáticamente
+        const docEl = document.documentElement;
+        const requestFS = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+        if (requestFS) {
+          setTimeout(() => {
+            requestFS.call(docEl).catch(() => {});
+          }, 500);
+        }
+
+        // Determinar de antemano si tenemos un opener accesible para decidir el flujo
+        let hasOpener = false;
+        try {
+          if (window.opener && !window.opener.closed && window.opener.allSorteos !== undefined) {
+            hasOpener = true;
+          }
+        } catch (e) {
+          // Excepción por CORS/file://
+        }
+
+        if (hasOpener) {
+          sincronizarConOpener();
+          setInterval(sincronizarConOpener, 500);
+        } else {
+          // Fallback a carga autónoma desde la API y sync de filtros por localStorage
+          fetchSorteos();
+          setInterval(sincronizarConOpener, 500);
+        }
+        
+        // Mostrar el overlay si no está en pantalla completa
+        checkFullscreenState();
+        
+        // Iniciar rotador
+        initTVRotation();
+        setTimeout(adjustTVLayout, 100);
+      } else {
+        // Inicializar localStorage con valores por defecto del parent para que la TV los lea al abrirse
+        try {
+          localStorage.setItem('betagama_currentDay', currentDay);
+          localStorage.setItem('betagama_currentLotteryFilter', currentLotteryFilter);
+          localStorage.setItem('betagama_searchQuery', searchQuery);
+          localStorage.setItem('betagama_allSorteos', JSON.stringify(allSorteos));
+        } catch(e){}
+        
+        fetchSorteos();
+      }
+    };
+  </script>
+</body>
+</html>
