@@ -588,9 +588,7 @@
        FULLSCREEN TV MODE (ESTILO PANTALLA COMPLETA & ROTADOR)
        ========================================================================== */
     body.tv-mode {
-      background-image: 
-        radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
-        radial-gradient(circle at 10% 10%, rgba(234, 88, 12, 0.04) 0%, transparent 40%);
+      background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
       overflow: hidden;
       padding: 0;
     }
@@ -629,6 +627,13 @@
       display: flex !important;
     }
 
+    body.tv-mode #results-container,
+    body.tv-mode .lottery-section {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex-grow: 1;
+    }
+
     @keyframes slideIn {
       from { opacity: 0; transform: translateX(60px); }
       to { opacity: 1; transform: translateX(0); }
@@ -657,9 +662,11 @@
     }
 
     body.tv-mode .results-grid {
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 1.5rem;
       margin-top: 2rem;
+      width: 100% !important;
+      max-width: 100% !important;
     }
 
     /* Estilos para modo compacto cuando hay más de 8 sorteos en el día */
