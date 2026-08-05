@@ -590,7 +590,36 @@ function limpiarDirectorioAutenticacion() {
   }
 }
 
+class DummyClient {
+  constructor() {
+    this.isDummy = true;
+  }
+  on(event, callback) {
+    return this;
+  }
+  async initialize() {
+    console.log('🤖 [DummyClient] Simulación de inicialización completada.');
+    return this;
+  }
+  async sendMessage(to, content, options) {
+    console.log(`🤖 [DummyClient] Mensaje simulado enviado a ${to}: ${content.substring(0, 100)}...`);
+    return true;
+  }
+  async destroy() {
+    console.log('🤖 [DummyClient] Simulación de destrucción completada.');
+    return true;
+  }
+}
+
 function inicializarClienteWhatsApp() {
+  if (process.env.ENABLE_WHATSAPP_BOT !== 'true') {
+    console.log('🤖 Bot de WhatsApp está COMPLETAMENTE DESACTIVADO para evitar suspensiones.');
+    client = new DummyClient();
+    botState = 'disconnected';
+    latestQr = null;
+    return;
+  }
+
   console.log('🤖 Inicializando cliente de WhatsApp...');
   
   // Borrar el archivo de bloqueo de Chromium para evitar el error "profile in use"
@@ -1681,11 +1710,7 @@ const deleteSingletonLocks = (dir) => {
   }
 };
 
-if (process.env.DISABLE_WHATSAPP_BOT !== 'true') {
-  inicializarClienteWhatsApp();
-} else {
-  console.log('🤖 Bot de WhatsApp desactivado mediante variable de entorno DISABLE_WHATSAPP_BOT.');
-}
+inicializarClienteWhatsApp();
 
 // Memoria volátil del motor de riesgo cuántico (Stop Loss)
 let memoriaRiesgoCuantico = {
