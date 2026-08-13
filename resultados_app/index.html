@@ -1099,25 +1099,45 @@
         <button class="close-btn" onclick="closeRiesgosModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <div style="margin-bottom: 1.2rem; display: flex; align-items: center; gap: 0.8rem;">
-          <label style="font-weight: 600; font-size: 0.9rem; font-family: 'Outfit', sans-serif; color: var(--text-muted);">Seleccionar Lotería:</label>
-          <select id="riesgos-loteria-select" onchange="cargarRiesgosModal()" style="
-            background: rgba(0, 0, 0, 0.04);
-            border: 1px solid rgba(0, 0, 0, 0.08);
+        <div style="margin-bottom: 1.2rem; display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <label style="font-weight: 600; font-size: 0.9rem; font-family: 'Outfit', sans-serif; color: var(--text-muted);">Seleccionar Lotería:</label>
+            <select id="riesgos-loteria-select" onchange="cargarRiesgosModal()" style="
+              background: rgba(0, 0, 0, 0.04);
+              border: 1px solid rgba(0, 0, 0, 0.08);
+              border-radius: 8px;
+              color: var(--text-main);
+              padding: 0.4rem 0.8rem;
+              font-family: inherit;
+              font-size: 0.85rem;
+              outline: none;
+              cursor: pointer;
+            ">
+              <option value="lotto_activo" style="background: var(--bg-card); color: var(--text-main);">Lotto Activo</option>
+              <option value="la_granjita" style="background: var(--bg-card); color: var(--text-main);">La Granjita</option>
+              <option value="guacharo" style="background: var(--bg-card); color: var(--text-main);">Guácharo Activo</option>
+              <option value="selva_plus" style="background: var(--bg-card); color: var(--text-main);">Selva Plus</option>
+              <option value="el_guacharito" style="background: var(--bg-card); color: var(--text-main);">El Guacharito</option>
+            </select>
+          </div>
+          <button onclick="exportarRiesgosExcel()" style="
+            background: #10b981;
+            color: white;
+            border: none;
             border-radius: 8px;
-            color: var(--text-main);
-            padding: 0.4rem 0.8rem;
-            font-family: inherit;
-            font-size: 0.85rem;
-            outline: none;
+            padding: 0.45rem 1rem;
+            font-size: 0.82rem;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
             cursor: pointer;
-          ">
-            <option value="lotto_activo" style="background: var(--bg-card); color: var(--text-main);">Lotto Activo</option>
-            <option value="la_granjita" style="background: var(--bg-card); color: var(--text-main);">La Granjita</option>
-            <option value="guacharo" style="background: var(--bg-card); color: var(--text-main);">Guácharo Activo</option>
-            <option value="selva_plus" style="background: var(--bg-card); color: var(--text-main);">Selva Plus</option>
-            <option value="el_guacharito" style="background: var(--bg-card); color: var(--text-main);">El Guacharito</option>
-          </select>
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+            transition: all 0.2s ease;
+          " onmouseover="this.style.background='#0d9488'" onmouseout="this.style.background='#10b981'">
+            📊 Exportar Excel
+          </button>
         </div>
         <div id="riesgos-modal-body-content">
           <div style="text-align: center; padding: 2rem; color: var(--text-muted);">Cargando configuración...</div>
@@ -2027,6 +2047,12 @@
       if (event.target.id === 'riesgos-modal') {
         closeRiesgosModal();
       }
+    }
+
+    function exportarRiesgosExcel() {
+      const select = document.getElementById('riesgos-loteria-select');
+      const targetLot = select.value;
+      window.open(`${API_BASE}/api/configuracion/riesgos/export-xls?loteria=${targetLot}`, '_blank');
     }
 
     async function cargarRiesgosModal() {
