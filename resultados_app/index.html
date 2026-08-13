@@ -2050,7 +2050,22 @@
             </div>
           </div>
         `;
-
+        // 1.5 Pesos de Aprendizaje de IA
+        if (data.pesosIA) {
+          const w = data.pesosIA;
+          html += `
+            <div style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.1); padding: 0.8rem 1rem; border-radius: 10px; margin-bottom: 1.2rem; font-size: 0.85rem;">
+              <div style="font-weight: bold; margin-bottom: 0.4rem; color: #2563eb; display: flex; align-items: center; gap: 0.4rem;">
+                🧠 Ponderación de Aprendizaje por Refuerzo (IA)
+              </div>
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <div>🔥 Calientes (Frecuencia): <strong style="color: #f97316;">${(w.w_hot * 100).toFixed(0)}%</strong></div>
+                <div>❄️ Fríos (Atraso): <strong style="color: #3b82f6;">${(w.w_cold * 100).toFixed(0)}%</strong></div>
+                <div>🔗 Markov (Secuencia): <strong style="color: #10b981;">${(w.w_markov * 100).toFixed(0)}%</strong></div>
+              </div>
+            </div>
+          `;
+        }
         // 2. Animales Bloqueados
         html += `<div class="riesgo-section-title">🚫 Animales Bloqueados (Límite Bs. 0)</div>`;
         const blockedList = data.animalesBloqueados || [];

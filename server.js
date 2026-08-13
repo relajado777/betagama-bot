@@ -384,6 +384,13 @@ async function inicializarCache() {
   } catch (err) {
     console.error('❌ Error al verificar/sembrar nuevas loterías:', err.message);
   }
+
+  // Pre-entrenar modelo de IA al iniciar el servidor con todo el historial disponible
+  try {
+    inicializarYEntrenarIA();
+  } catch (iaInitErr) {
+    console.error('⚠️ Error al pre-entrenar modelo de IA:', iaInitErr.message);
+  }
 }
 
 // Estado de sesión en memoria para los clientes que interactúan por WhatsApp
@@ -2194,12 +2201,81 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       ultimoResultado = obtenerCodigoResultado(last120Sorteos[0].resultado);
     }
 
-    const listaFrecuenciasFiltradas = ultimoResultado 
-      ? listaFrecuencias.filter(f => f.numero !== ultimoResultado)
-      : listaFrecuencias;
+    // === CÁLCULO DE PREDICCIONES REFORZADAS CON IA (MODELO HÍBRIDO) ===
+    const normLotId = loteriaId ? loteriaId.toLowerCase().trim().replace(/\s+/g, '_') : '';
+    if (!cache.riesgos.pesosIA) cache.riesgos.pesosIA = {};
+    if (normLotId && !cache.riesgos.pesosIA[normLotId]) {
+      cache.riesgos.pesosIA[normLotId] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    }
+    const w = (normLotId && cache.riesgos.pesosIA[normLotId]) || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
 
-    // Los 5 animales más calientes (excluyendo el último ganador)
-    const calientes = listaFrecuenciasFiltradas.slice(0, 5).map(f => f.numero);
+    // 1. Hotness Score (Frecuencia)
+    const sumFreq = Object.values(freq).reduce((a, b) => a + b, 0) || 1;
+    const s_hot = {};
+    Object.keys(targetAnimalMap).forEach(k => {
+      s_hot[k] = freq[k] / sumFreq;
+    });
+
+    // 2. Coldness Score (Atrasos)
+    const delays = {};
+    Object.keys(targetAnimalMap).forEach(k => {
+      delays[k] = 9999;
+    });
+    last120Sorteos.forEach((s, idx) => {
+      const code = obtenerCodigoResultado(s.resultado);
+      if (code && delays[code] === 9999) {
+        delays[code] = idx;
+      }
+    });
+    const sumDelay = Object.values(delays).reduce((a, b) => a + b, 0) || 1;
+    const s_cold = {};
+    Object.keys(targetAnimalMap).forEach(k => {
+      s_cold[k] = delays[k] / sumDelay;
+    });
+
+    // 3. Markov Score (Transición)
+    const lastCode = last120Sorteos.length > 0 ? obtenerCodigoResultado(last120Sorteos[0].resultado) : null;
+    const transitionCounts = {};
+    Object.keys(targetAnimalMap).forEach(k => {
+      transitionCounts[k] = 0;
+    });
+    let totalTransitions = 0;
+    const numAnimals = Object.keys(targetAnimalMap).length || 1;
+    if (lastCode) {
+      for (let i = 0; i < last120Sorteos.length - 1; i++) {
+        const prevWinner = obtenerCodigoResultado(last120Sorteos[i + 1].resultado);
+        const currentWinner = obtenerCodigoResultado(last120Sorteos[i].resultado);
+        if (prevWinner === lastCode && currentWinner && transitionCounts[currentWinner] !== undefined) {
+          transitionCounts[currentWinner]++;
+          totalTransitions++;
+        }
+      }
+    }
+    const s_markov = {};
+    const defaultProb = 1 / numAnimals;
+    Object.keys(targetAnimalMap).forEach(k => {
+      s_markov[k] = totalTransitions > 0 ? (transitionCounts[k] / totalTransitions) : defaultProb;
+    });
+
+    // 4. Combined Hybrid Score
+    const combinedScores = Object.entries(targetAnimalMap).map(([num, name]) => {
+      const sh = s_hot[num] || 0;
+      const sc = s_cold[num] || 0;
+      const sm = s_markov[num] || 0;
+      const combined = w.w_hot * sh + w.w_cold * sc + w.w_markov * sm;
+      return {
+        numero: num,
+        animal: name,
+        score: combined
+      };
+    }).sort((a, b) => b.score - a.score);
+
+    const combinedFiltrados = ultimoResultado
+      ? combinedScores.filter(f => f.numero !== ultimoResultado)
+      : combinedScores;
+
+    // Los 5 animales más calientes/viables según el modelo híbrido reforzado por la IA
+    const calientes = combinedFiltrados.slice(0, 5).map(f => f.numero);
 
     // Calcular atrasados (Opción 2): cantidad de sorteos transcurridos desde su última aparición
     const coldScores = {};
@@ -2347,7 +2423,8 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       calientes,
       atrasados,
       aciertoCalientesSemana,
-      aciertoAtrasadosSemana
+      aciertoAtrasadosSemana,
+      pesosIA: w
     };
   } catch (error) {
     console.error("Error al calcular estadísticas de riesgo:", error);
@@ -2359,9 +2436,207 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
     return {
       listaFrecuencias,
       calientes: [],
-      atrasados: []
+      atrasados: [],
+      pesosIA: { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 }
     };
   }
+}
+
+// === FUNCIONES DE APRENDIZAJE POR REFUERZO DE INTELIGENCIA ARTIFICIAL ===
+function entrenarIAInternal(loteria, resultado, hora, fecha, sortedAll) {
+  const normLotId = loteria.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  if (!cache.riesgos) cache.riesgos = {};
+  if (!cache.riesgos.pesosIA) cache.riesgos.pesosIA = {};
+  if (!cache.riesgos.pesosIA[normLotId]) {
+    cache.riesgos.pesosIA[normLotId] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+  }
+  
+  let targetAnimalMap = ANIMALITOS_MAP;
+  const matchedLot = cache.loterias.find(l => {
+    const normId = l.id.toLowerCase().trim().replace(/\s+/g, '_');
+    return normId === normLotId ||
+           (normId === 'lotto' && normLotId === 'lotto_activo') || 
+           (normId === 'lotto_activo' && normLotId === 'lotto') ||
+           (normId === 'granja' && normLotId === 'la_granjita') ||
+           (normId === 'la_granjita' && normLotId === 'granja') ||
+           (normId === 'guacharo_activo' && normLotId === 'guacharo') ||
+           (normId === 'guacharo' && normLotId === 'guacharo_activo') ||
+           (normId === 'selva' && normLotId === 'selva_plus') ||
+           (normId === 'selva_plus' && normLotId === 'selva') ||
+           (normId === 'guacharito' && normLotId === 'el_guacharito') ||
+           (normId === 'el_guacharito' && normLotId === 'guacharito');
+  });
+  if (matchedLot && matchedLot.animales && Object.keys(matchedLot.animales).length > 0) {
+    targetAnimalMap = matchedLot.animales;
+  }
+  const animalKeys = Object.keys(targetAnimalMap);
+  const numAnimals = animalKeys.length;
+  if (numAnimals === 0) return;
+
+  const parseTimeToMinutes = (h) => {
+    const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+    if (!matches) return 0;
+    let hr = parseInt(matches[1], 10);
+    const min = parseInt(matches[2], 10);
+    const meridiano = matches[3].toLowerCase();
+    if (meridiano === 'pm' && hr < 12) hr += 12;
+    if (meridiano === 'am' && hr === 12) hr = 0;
+    return hr * 60 + min;
+  };
+
+  const obtenerCodigoResultado = (resStr) => {
+    if (!resStr) return '';
+    const match = resStr.match(/\(#(\d+)\)/);
+    if (match) return match[1];
+    return resStr.trim();
+  };
+
+  const nuevoMinutos = parseTimeToMinutes(hora);
+
+  const prevDraws = sortedAll.filter(prev => {
+    const normS = prev.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+    const isMatch = normS === normLotId ||
+                  (normS === 'lotto' && normLotId === 'lotto_activo') || 
+                  (normS === 'lotto_activo' && normLotId === 'lotto') ||
+                  (normS === 'granja' && normLotId === 'la_granjita') ||
+                  (normS === 'la_granjita' && normLotId === 'granja') ||
+                  (normS === 'guacharo_activo' && normLotId === 'guacharo') ||
+                  (normS === 'guacharo' && normLotId === 'guacharo_activo') ||
+                  (normS === 'selva' && normLotId === 'selva_plus') ||
+                  (normS === 'selva_plus' && normLotId === 'selva') ||
+                  (normS === 'guacharito' && normLotId === 'el_guacharito') ||
+                  (normS === 'el_guacharito' && normLotId === 'guacharito');
+    if (!isMatch) return false;
+    if (prev.fecha < fecha) return true;
+    if (prev.fecha === fecha && parseTimeToMinutes(prev.hora) < nuevoMinutos) return true;
+    return false;
+  }).slice(0, 120);
+
+  if (prevDraws.length < 15) return;
+
+  // 1. Hotness Score (Frecuencia)
+  const freq = {};
+  animalKeys.forEach(k => freq[k] = 0);
+  prevDraws.forEach(prev => {
+    const code = obtenerCodigoResultado(prev.resultado);
+    if (code && freq[code] !== undefined) freq[code]++;
+  });
+  const sumFreq = Object.values(freq).reduce((a, b) => a + b, 0) || 1;
+  const s_hot = {};
+  animalKeys.forEach(k => s_hot[k] = freq[k] / sumFreq);
+
+  // 2. Coldness Score (Atrasos)
+  const delays = {};
+  animalKeys.forEach(k => delays[k] = 9999);
+  prevDraws.forEach((prev, idx) => {
+    const code = obtenerCodigoResultado(prev.resultado);
+    if (code && delays[code] === 9999) {
+      delays[code] = idx;
+    }
+  });
+  const sumDelay = Object.values(delays).reduce((a, b) => a + b, 0) || 1;
+  const s_cold = {};
+  animalKeys.forEach(k => s_cold[k] = delays[k] / sumDelay);
+
+  // 3. Markov Score (Transición)
+  const lastCode = obtenerCodigoResultado(prevDraws[0].resultado);
+  const transitionCounts = {};
+  animalKeys.forEach(k => transitionCounts[k] = 0);
+  let totalTransitions = 0;
+  if (lastCode) {
+    for (let i = 0; i < prevDraws.length - 1; i++) {
+      const prevWinner = obtenerCodigoResultado(prevDraws[i + 1].resultado);
+      const currentWinner = obtenerCodigoResultado(prevDraws[i].resultado);
+      if (prevWinner === lastCode && currentWinner && transitionCounts[currentWinner] !== undefined) {
+        transitionCounts[currentWinner]++;
+        totalTransitions++;
+      }
+    }
+  }
+  const s_markov = {};
+  const defaultProb = 1 / numAnimals;
+  animalKeys.forEach(k => {
+    s_markov[k] = totalTransitions > 0 ? (transitionCounts[k] / totalTransitions) : defaultProb;
+  });
+
+  // 4. Actualizar Pesos (Reinforcement Learning)
+  const winnerCode = obtenerCodigoResultado(resultado);
+  if (winnerCode && animalKeys.includes(winnerCode)) {
+    const sh = s_hot[winnerCode] || 0;
+    const sc = s_cold[winnerCode] || 0;
+    const sm = s_markov[winnerCode] || 0;
+    
+    const avg_sh = 1 / numAnimals;
+    const avg_sc = 1 / numAnimals;
+    const avg_sm = 1 / numAnimals;
+    
+    const dw_hot = sh - avg_sh;
+    const dw_cold = sc - avg_sc;
+    const dw_markov = sm - avg_sm;
+    
+    const lr = 0.05;
+    const w = cache.riesgos.pesosIA[normLotId];
+    w.w_hot = Math.max(0.05, w.w_hot + lr * dw_hot);
+    w.w_cold = Math.max(0.05, w.w_cold + lr * dw_cold);
+    w.w_markov = Math.max(0.05, w.w_markov + lr * dw_markov);
+    
+    const sumW = w.w_hot + w.w_cold + w.w_markov;
+    w.w_hot /= sumW;
+    w.w_cold /= sumW;
+    w.w_markov /= sumW;
+  }
+}
+
+function entrenarIA(loteria, resultado, hora, fecha) {
+  try {
+    entrenarIAInternal(loteria, resultado, hora, fecha, cache.sorteos);
+    dbSet('configuracion', 'riesgos', cache.riesgos, true).catch(err => {
+      console.error('[IA] Error al persistir pesos en base de datos:', err.message);
+    });
+  } catch (err) {
+    console.error('[IA] Error al entrenar modelo en línea:', err.message);
+  }
+}
+
+function inicializarYEntrenarIA() {
+  console.log('🧠 Pre-entrenando modelo de Inteligencia Artificial con el historial de sorteos...');
+  
+  if (!cache.riesgos) cache.riesgos = {};
+  if (!cache.riesgos.pesosIA) cache.riesgos.pesosIA = {};
+
+  const parseTimeToMinutes = (h) => {
+    const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+    if (!matches) return 0;
+    let hr = parseInt(matches[1], 10);
+    const min = parseInt(matches[2], 10);
+    const meridiano = matches[3].toLowerCase();
+    if (meridiano === 'pm' && hr < 12) hr += 12;
+    if (meridiano === 'am' && hr === 12) hr = 0;
+    return hr * 60 + min;
+  };
+
+  const sortedHistory = [...cache.sorteos].sort((a, b) => {
+    const dateCompare = a.fecha.localeCompare(b.fecha);
+    if (dateCompare !== 0) return dateCompare;
+    return parseTimeToMinutes(a.hora) - parseTimeToMinutes(b.hora);
+  });
+
+  cache.loterias.forEach(lot => {
+    const normId = lot.id.toLowerCase().trim().replace(/\s+/g, '_');
+    cache.riesgos.pesosIA[normId] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+  });
+
+  sortedHistory.forEach(s => {
+    if (s.resultado) {
+      entrenarIAInternal(s.loteria, s.resultado, s.hora, s.fecha, sortedHistory);
+    }
+  });
+
+  console.log('🧠 Entrenamiento de IA completado con éxito. Pesos aprendidos por lotería:');
+  Object.entries(cache.riesgos.pesosIA).forEach(([lot, w]) => {
+    console.log(`   ➔ ${lot.toUpperCase()}: 🔥 Calientes: ${(w.w_hot*100).toFixed(0)}%, ❄️ Fríos: ${(w.w_cold*100).toFixed(0)}%, 🔗 Markov: ${(w.w_markov*100).toFixed(0)}%`);
+  });
 }
 
 
@@ -2973,6 +3248,9 @@ async function registrarResultadoSorteoInternal(loteria, hora, resultado, fecha)
       cerrado: true
     };
     await dbSet('sorteos', sorteoId, nuevoSorteo);
+
+    // Entrenar modelo de IA en línea con este nuevo resultado
+    entrenarIA(loteria, resultado, hora, fecha);
 
     // Filtrar jugadas correspondientes en memoria caché
     const matchingJugadas = cache.jugadas.filter(j => 
