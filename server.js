@@ -2319,7 +2319,6 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
     const atrasados = listaAtrasados.slice(0, 5).map(f => f.numero);
 
     // === CÁLCULO DE ANIMALES FIJOS DEL DÍA (ESTABLES) ===
-    const todayCaracasStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const sortedHistoryPreToday = sortedByRecency.filter(s => s.fecha < todayCaracasStr);
     const historyForFijos = sortedHistoryPreToday.length >= 15 ? sortedHistoryPreToday : sortedByRecency;
     const historyFijos120 = historyForFijos.slice(0, 120);
