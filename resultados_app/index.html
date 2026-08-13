@@ -2096,9 +2096,10 @@
           
           html += `</div>`;
         }
-        // 2. Animales Bloqueados
+        // 2. Animales Bloqueados (Filtrados por la lotería seleccionada)
         html += `<div class="riesgo-section-title">🚫 Animales Bloqueados (Límite Bs. 0)</div>`;
-        const blockedList = data.animalesBloqueados || [];
+        const rawBlockedList = data.animalesBloqueados || [];
+        const blockedList = rawBlockedList.filter(num => (data.listaFrecuencias || []).some(f => f.numero === num));
         if (blockedList.length === 0) {
           html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay animales bloqueados para hoy.</p>`;
         } else {
@@ -2119,10 +2120,13 @@
           html += `</div>`;
         }
 
-        // 3. Límites específicos en Bolívares
+        // 3. Límites específicos en Bolívares (Filtrados por la lotería seleccionada)
         html += `<div class="riesgo-section-title">💸 Límites Específicos por Animal (Bs.)</div>`;
         const specificLimits = data.limitesEspecificos || {};
-        const limitEntries = Object.entries(specificLimits).filter(([num, limit]) => limit !== null && limit !== undefined && limit !== '');
+        const limitEntries = Object.entries(specificLimits).filter(([num, limit]) => {
+          const existsInLottery = (data.listaFrecuencias || []).some(f => f.numero === num);
+          return existsInLottery && limit !== null && limit !== undefined && limit !== '';
+        });
         if (limitEntries.length === 0) {
           html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay límites específicos configurados.</p>`;
         } else {
