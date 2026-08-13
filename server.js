@@ -2946,9 +2946,21 @@ app.get('/api/configuracion/riesgos/export-xls', async (req, res) => {
 
   try {
     const loteriaId = loteria;
-    const targetLoteriaMap = OBTENER_ANIMAL_MAP(loteriaId);
-    if (!targetLoteriaMap) {
-      return res.status(400).json({ error: "Lotería no soportada o inválida" });
+    const normInput = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+    
+    let targetLoteriaMap = ANIMALITOS_MAP;
+    const matchedLot = cache.loterias.find(l => {
+      const normName = l.nombre.toLowerCase().trim().replace(/\s+/g, '_');
+      const normId = l.id.toLowerCase().trim().replace(/\s+/g, '_');
+      return normName === normInput || normId === normInput ||
+             (normName === 'lotto_activo' && normInput === 'lotto') ||
+             (normName === 'la_granjita' && normInput === 'granja') ||
+             (normName === 'guacharo' && normInput === 'guacharo_activo') ||
+             (normName === 'selva_plus' && normInput === 'selva') ||
+             (normName === 'el_guacharito' && normInput === 'guacharito');
+    });
+    if (matchedLot && matchedLot.animales && Object.keys(matchedLot.animales).length > 0) {
+      targetLoteriaMap = matchedLot.animales;
     }
 
     // Obtener todos los sorteos ordenados de más reciente a más antiguo
