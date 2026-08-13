@@ -2111,6 +2111,14 @@ async function actualizarAnalisisCuantico(loteriaId) {
   }
 }
 
+function obtenerLlavePeriodo(fechaStr) {
+  // Evitar desajustes de zona horaria forzando mediodía
+  const date = new Date(fechaStr + 'T12:00:00');
+  const day = date.getDay();
+  const esFinDeSemana = (day === 0 || day === 6); // 0 = Domingo, 6 = Sábado
+  return esFinDeSemana ? '_weekend' : '_weekday';
+}
+
 async function obtenerEstadisticasRiesgo(loteriaId) {
   try {
     let rawSorteos = [...cache.sorteos];
@@ -2204,10 +2212,21 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
     // === CÁLCULO DE PREDICCIONES REFORZADAS CON IA (MODELO HÍBRIDO) ===
     const normLotId = loteriaId ? loteriaId.toLowerCase().trim().replace(/\s+/g, '_') : '';
     if (!cache.riesgos.pesosIA) cache.riesgos.pesosIA = {};
-    if (normLotId && !cache.riesgos.pesosIA[normLotId]) {
-      cache.riesgos.pesosIA[normLotId] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    
+    // Obtener periodo de hoy en Caracas para cargar los pesos correspondientes
+    const todayCaracasStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const periodoHoy = obtenerLlavePeriodo(todayCaracasStr);
+    const keyHoy = normLotId + periodoHoy;
+
+    if (normLotId) {
+      if (!cache.riesgos.pesosIA[normLotId + '_weekday']) {
+        cache.riesgos.pesosIA[normLotId + '_weekday'] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+      }
+      if (!cache.riesgos.pesosIA[normLotId + '_weekend']) {
+        cache.riesgos.pesosIA[normLotId + '_weekend'] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+      }
     }
-    const w = (normLotId && cache.riesgos.pesosIA[normLotId]) || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    const w = (normLotId && cache.riesgos.pesosIA[keyHoy]) || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
 
     // 1. Hotness Score (Frecuencia)
     const sumFreq = Object.values(freq).reduce((a, b) => a + b, 0) || 1;
@@ -2371,31 +2390,79 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
             }
           });
 
-          const localSortedFreqs = Object.entries(localFreq).map(([num, count]) => ({
-            numero: num,
-            frecuencia: count
-          })).sort((a, b) => b.frecuencia - a.frecuencia);
+          // Cargar pesos correspondientes a la fecha del sorteo evaluado
+          const periodoS = obtenerLlavePeriodo(s.fecha);
+          const w_s = cache.riesgos.pesosIA[normLotId + periodoS] || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
 
-          const localUltimoResultado = obtenerCodigoResultado(prevDraws[0].resultado);
-          const localFilteredFreqs = localUltimoResultado 
-            ? localSortedFreqs.filter(f => f.numero !== localUltimoResultado)
-            : localSortedFreqs;
+          // 1. Hotness Score (Frecuencia)
+          const localSumFreq = Object.values(localFreq).reduce((a, b) => a + b, 0) || 1;
+          const s_hot_local = {};
+          Object.keys(targetAnimalMap).forEach(k => {
+            s_hot_local[k] = localFreq[k] / localSumFreq;
+          });
 
-          const localCalientes = localFilteredFreqs.slice(0, 5).map(f => f.numero);
-
-          // Atrasados
-          const localColdScores = {};
+          // 2. Coldness Score (Atrasos)
+          const localDelays = {};
           for (const num of Object.keys(targetAnimalMap)) {
-            localColdScores[num] = 9999;
+            localDelays[num] = 9999;
           }
           prevDraws.forEach((prev, index) => {
             const code = obtenerCodigoResultado(prev.resultado);
-            if (code && localColdScores[code] === 9999) {
-              localColdScores[code] = index;
+            if (code && localDelays[code] === 9999) {
+              localDelays[code] = index;
             }
           });
+          const localSumDelay = Object.values(localDelays).reduce((a, b) => a + b, 0) || 1;
+          const s_cold_local = {};
+          Object.keys(targetAnimalMap).forEach(k => {
+            s_cold_local[k] = localDelays[k] / localSumDelay;
+          });
 
-          const localSortedColds = Object.entries(localColdScores).map(([num, score]) => ({
+          const localUltimoResultado = obtenerCodigoResultado(prevDraws[0].resultado);
+
+          // 3. Markov Score (Transición)
+          const localTransitionCounts = {};
+          for (const num of Object.keys(targetAnimalMap)) {
+            localTransitionCounts[num] = 0;
+          }
+          let localTotalTransitions = 0;
+          const localNumAnimals = Object.keys(targetAnimalMap).length || 1;
+          if (localUltimoResultado) {
+            for (let i = 0; i < prevDraws.length - 1; i++) {
+              const prevWinner = obtenerCodigoResultado(prevDraws[i + 1].resultado);
+              const currentWinner = obtenerCodigoResultado(prevDraws[i].resultado);
+              if (prevWinner === localUltimoResultado && currentWinner && localTransitionCounts[currentWinner] !== undefined) {
+                localTransitionCounts[currentWinner]++;
+                localTotalTransitions++;
+              }
+            }
+          }
+          const s_markov_local = {};
+          const localDefaultProb = 1 / localNumAnimals;
+          Object.keys(targetAnimalMap).forEach(k => {
+            s_markov_local[k] = localTotalTransitions > 0 ? (localTransitionCounts[k] / localTotalTransitions) : localDefaultProb;
+          });
+
+          // 4. Combined Hybrid Score local
+          const localCombinedScores = Object.entries(targetAnimalMap).map(([num, name]) => {
+            const sh = s_hot_local[num] || 0;
+            const sc = s_cold_local[num] || 0;
+            const sm = s_markov_local[num] || 0;
+            const combined = w_s.w_hot * sh + w_s.w_cold * sc + w_s.w_markov * sm;
+            return {
+              numero: num,
+              score: combined
+            };
+          }).sort((a, b) => b.score - a.score);
+
+          const localCombinedFiltrados = localUltimoResultado
+            ? localCombinedScores.filter(f => f.numero !== localUltimoResultado)
+            : localCombinedScores;
+
+          const localCalientes = localCombinedFiltrados.slice(0, 5).map(f => f.numero);
+
+          // Calcular atrasados tradicionales (para el porcentaje de atrasados tradicional)
+          const localSortedColds = Object.entries(localDelays).map(([num, score]) => ({
             numero: num,
             atraso: score
           })).sort((a, b) => b.atraso - a.atraso);
@@ -2418,13 +2485,17 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       console.error("Error al calcular backtesting semanal:", backtestErr);
     }
 
+    const w_weekday = cache.riesgos.pesosIA[normLotId + '_weekday'] || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    const w_weekend = cache.riesgos.pesosIA[normLotId + '_weekend'] || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+
     return {
       listaFrecuencias,
       calientes,
       atrasados,
       aciertoCalientesSemana,
       aciertoAtrasadosSemana,
-      pesosIA: w
+      pesosIAWeekday: w_weekday,
+      pesosIAWeekend: w_weekend
     };
   } catch (error) {
     console.error("Error al calcular estadísticas de riesgo:", error);
@@ -2437,7 +2508,8 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       listaFrecuencias,
       calientes: [],
       atrasados: [],
-      pesosIA: { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 }
+      pesosIAWeekday: { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 },
+      pesosIAWeekend: { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 }
     };
   }
 }
@@ -2448,8 +2520,15 @@ function entrenarIAInternal(loteria, resultado, hora, fecha, sortedAll) {
   
   if (!cache.riesgos) cache.riesgos = {};
   if (!cache.riesgos.pesosIA) cache.riesgos.pesosIA = {};
-  if (!cache.riesgos.pesosIA[normLotId]) {
-    cache.riesgos.pesosIA[normLotId] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+  
+  const periodoKey = obtenerLlavePeriodo(fecha);
+  const targetKey = normLotId + periodoKey;
+  
+  if (!cache.riesgos.pesosIA[normLotId + '_weekday']) {
+    cache.riesgos.pesosIA[normLotId + '_weekday'] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+  }
+  if (!cache.riesgos.pesosIA[normLotId + '_weekend']) {
+    cache.riesgos.pesosIA[normLotId + '_weekend'] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
   }
   
   let targetAnimalMap = ANIMALITOS_MAP;
@@ -2576,7 +2655,7 @@ function entrenarIAInternal(loteria, resultado, hora, fecha, sortedAll) {
     const dw_markov = sm - avg_sm;
     
     const lr = 0.05;
-    const w = cache.riesgos.pesosIA[normLotId];
+    const w = cache.riesgos.pesosIA[targetKey];
     w.w_hot = Math.max(0.05, w.w_hot + lr * dw_hot);
     w.w_cold = Math.max(0.05, w.w_cold + lr * dw_cold);
     w.w_markov = Math.max(0.05, w.w_markov + lr * dw_markov);
@@ -2624,7 +2703,8 @@ function inicializarYEntrenarIA() {
 
   cache.loterias.forEach(lot => {
     const normId = lot.id.toLowerCase().trim().replace(/\s+/g, '_');
-    cache.riesgos.pesosIA[normId] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    cache.riesgos.pesosIA[normId + '_weekday'] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    cache.riesgos.pesosIA[normId + '_weekend'] = { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
   });
 
   sortedHistory.forEach(s => {
@@ -2757,7 +2837,8 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
       atrasados: stats.atrasados || [],
       aciertoCalientesSemana: stats.aciertoCalientesSemana || 0,
       aciertoAtrasadosSemana: stats.aciertoAtrasadosSemana || 0,
-      pesosIA: stats.pesosIA || null,
+      pesosIAWeekday: stats.pesosIAWeekday || null,
+      pesosIAWeekend: stats.pesosIAWeekend || null,
       cuantico: cache.riesgos.cuantico || null
     });
   } catch (error) {
