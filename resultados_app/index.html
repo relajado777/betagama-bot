@@ -907,6 +907,13 @@
       border: 1px solid rgba(59, 130, 246, 0.2);
       color: #1d4ed8;
     }
+    .stat-badge.fijo {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #047857;
+    }
+
+
 
     /* Switch/Toggle Premium Styles */
     .switch-label {
@@ -2148,6 +2155,26 @@
             const emoji = ANIMAL_EMOJIS[name] || '🐾';
             html += `
               <span class="stat-badge caliente">
+                <span>${emoji}</span>
+                <strong>${name} #${num}</strong>
+              </span>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        // 4.5 Animales Fijos del Día (Estables hoy)
+        html += `<div class="riesgo-section-title">📌 Animales Fijos del Día (Estables hoy) &nbsp;<span style="font-size: 0.8rem; color: #10b981; background: rgba(16, 185, 129, 0.1); padding: 0.2rem 0.5rem; border-radius: 6px;">Acierto Semanal: <strong>${data.aciertoFijosSemana || 0}%</strong></span></div>`;
+        const fijosList = data.fijosDia || [];
+        if (fijosList.length === 0) {
+          html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay estadísticas de fijos diarios registradas.</p>`;
+        } else {
+          html += `<div class="stat-list" style="margin-bottom: 1.2rem;">`;
+          fijosList.forEach(num => {
+            const name = ANIMAL_NUMEROS[num] || 'Desconocido';
+            const emoji = ANIMAL_EMOJIS[name] || '🐾';
+            html += `
+              <span class="stat-badge fijo">
                 <span>${emoji}</span>
                 <strong>${name} #${num}</strong>
               </span>

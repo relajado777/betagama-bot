@@ -2318,9 +2318,58 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
     // Los 5 animales más atrasados (fríos)
     const atrasados = listaAtrasados.slice(0, 5).map(f => f.numero);
 
+    // === CÁLCULO DE ANIMALES FIJOS DEL DÍA (ESTABLES) ===
+    const todayCaracasStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const sortedHistoryPreToday = sortedByRecency.filter(s => s.fecha < todayCaracasStr);
+    const historyForFijos = sortedHistoryPreToday.length >= 15 ? sortedHistoryPreToday : sortedByRecency;
+    const historyFijos120 = historyForFijos.slice(0, 120);
+
+    const freqFijos = {};
+    Object.keys(targetAnimalMap).forEach(k => { freqFijos[k] = 0; });
+    historyFijos120.forEach(s => {
+      const num = obtenerCodigoResultado(s.resultado);
+      if (num && freqFijos[num] !== undefined) freqFijos[num]++;
+    });
+    const sumFreqF = Object.values(freqFijos).reduce((a, b) => a + b, 0) || 1;
+    const s_hot_f = {};
+    Object.keys(targetAnimalMap).forEach(k => { s_hot_f[k] = freqFijos[k] / sumFreqF; });
+
+    const delaysF = {};
+    Object.keys(targetAnimalMap).forEach(k => { delaysF[k] = 9999; });
+    historyFijos120.forEach((s, idx) => {
+      const code = obtenerCodigoResultado(s.resultado);
+      if (code && delaysF[code] === 9999) delaysF[code] = idx;
+    });
+    const sumDelayF = Object.values(delaysF).reduce((a, b) => a + b, 0) || 1;
+    const s_cold_f = {};
+    Object.keys(targetAnimalMap).forEach(k => { s_cold_f[k] = delaysF[k] / sumDelayF; });
+
+    const w_f = (normLotId && cache.riesgos.pesosIA[keyHoy]) || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+    const sumW_f = (w_f.w_hot + w_f.w_cold) || 1;
+    const w_hot_norm = w_f.w_hot / sumW_f;
+    const w_cold_norm = w_f.w_cold / sumW_f;
+
+    const scoresFijos = Object.entries(targetAnimalMap).map(([num, name]) => {
+      const sh = s_hot_f[num] || 0;
+      const sc = s_cold_f[num] || 0;
+      const combined = w_hot_norm * sh + w_cold_norm * sc;
+      return {
+        numero: num,
+        score: combined
+      };
+    }).sort((a, b) => b.score - a.score);
+
+    const ultimoAyerResultado = historyForFijos.length > 0 ? obtenerCodigoResultado(historyForFijos[0].resultado) : null;
+    const scoresFijosFiltrados = ultimoAyerResultado
+      ? scoresFijos.filter(f => f.numero !== ultimoAyerResultado)
+      : scoresFijos;
+
+    const fijosDia = scoresFijosFiltrados.slice(0, 5).map(f => f.numero);
+
     // === CÁLCULO DE ACIERTOS HISTÓRICOS SEMANALES (BACKTESTING EN MEMORIA) ===
     let aciertoCalientesSemana = 0;
     let aciertoAtrasadosSemana = 0;
+    let aciertoFijosSemana = 0;
     
     try {
       const today = new Date();
@@ -2353,7 +2402,9 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
 
       let hotHits = 0;
       let coldHits = 0;
+      let fijosHits = 0;
       let totalEvaluated = 0;
+      let totalFijosEvaluated = 0;
 
       testDraws.forEach(s => {
         const idx = sortedByRecency.indexOf(s);
@@ -2469,18 +2520,72 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
 
           const localAtrasados = localSortedColds.slice(0, 5).map(f => f.numero);
 
+          // Calcular Fijos del día para este sorteo (basado en días anteriores)
+          const prevDrawsBeforeDay = prevDraws.filter(prev => prev.fecha < s.fecha);
+          const fijos120 = prevDrawsBeforeDay.slice(0, 120);
+          
+          let localFijos = [];
+          if (fijos120.length >= 15) {
+            const freqF = {};
+            Object.keys(targetAnimalMap).forEach(k => { freqF[k] = 0; });
+            fijos120.forEach(prev => {
+              const num = obtenerCodigoResultado(prev.resultado);
+              if (num && freqF[num] !== undefined) freqF[num]++;
+            });
+            const sumFreqF = Object.values(freqF).reduce((a, b) => a + b, 0) || 1;
+            const s_hot_f = {};
+            Object.keys(targetAnimalMap).forEach(k => { s_hot_f[k] = freqF[k] / sumFreqF; });
+
+            const delaysF = {};
+            Object.keys(targetAnimalMap).forEach(k => { delaysF[k] = 9999; });
+            fijos120.forEach((prev, idx) => {
+              const code = obtenerCodigoResultado(prev.resultado);
+              if (code && delaysF[code] === 9999) delaysF[code] = idx;
+            });
+            const sumDelayF = Object.values(delaysF).reduce((a, b) => a + b, 0) || 1;
+            const s_cold_f = {};
+            Object.keys(targetAnimalMap).forEach(k => { s_cold_f[k] = delaysF[k] / sumDelayF; });
+
+            const sumW_s = (w_s.w_hot + w_s.w_cold) || 1;
+            const w_hot_norm = w_s.w_hot / sumW_s;
+            const w_cold_norm = w_s.w_cold / sumW_s;
+
+            const scoresF = Object.entries(targetAnimalMap).map(([num, name]) => {
+              const sh = s_hot_f[num] || 0;
+              const sc = s_cold_f[num] || 0;
+              const combined = w_hot_norm * sh + w_cold_norm * sc;
+              return {
+                numero: num,
+                score: combined
+              };
+            }).sort((a, b) => b.score - a.score);
+
+            const ultimoAyer = fijos120.length > 0 ? obtenerCodigoResultado(fijos120[0].resultado) : null;
+            const scoresFijosFiltrados = ultimoAyer
+              ? scoresF.filter(f => f.numero !== ultimoAyer)
+              : scoresF;
+            
+            localFijos = scoresFijosFiltrados.slice(0, 5).map(f => f.numero);
+          }
+
           // Evaluar acierto
           const resultNum = obtenerCodigoResultado(s.resultado);
           if (resultNum) {
             if (localCalientes.includes(resultNum)) hotHits++;
             if (localAtrasados.includes(resultNum)) coldHits++;
             totalEvaluated++;
+
+            if (localFijos.length > 0) {
+              if (localFijos.includes(resultNum)) fijosHits++;
+              totalFijosEvaluated++;
+            }
           }
         }
       });
 
       aciertoCalientesSemana = totalEvaluated > 0 ? Math.round((hotHits / totalEvaluated) * 100) : 0;
       aciertoAtrasadosSemana = totalEvaluated > 0 ? Math.round((coldHits / totalEvaluated) * 100) : 0;
+      aciertoFijosSemana = totalFijosEvaluated > 0 ? Math.round((fijosHits / totalFijosEvaluated) * 100) : 0;
     } catch (backtestErr) {
       console.error("Error al calcular backtesting semanal:", backtestErr);
     }
@@ -2492,8 +2597,10 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       listaFrecuencias,
       calientes,
       atrasados,
+      fijosDia,
       aciertoCalientesSemana,
       aciertoAtrasadosSemana,
+      aciertoFijosSemana,
       pesosIAWeekday: w_weekday,
       pesosIAWeekend: w_weekend
     };
@@ -2508,6 +2615,10 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
       listaFrecuencias,
       calientes: [],
       atrasados: [],
+      fijosDia: [],
+      aciertoCalientesSemana: 0,
+      aciertoAtrasadosSemana: 0,
+      aciertoFijosSemana: 0,
       pesosIAWeekday: { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 },
       pesosIAWeekend: { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 }
     };
@@ -2835,8 +2946,10 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
       listaFrecuencias: stats.listaFrecuencias,
       calientes: stats.calientes,
       atrasados: stats.atrasados || [],
+      fijosDia: stats.fijosDia || [],
       aciertoCalientesSemana: stats.aciertoCalientesSemana || 0,
       aciertoAtrasadosSemana: stats.aciertoAtrasadosSemana || 0,
+      aciertoFijosSemana: stats.aciertoFijosSemana || 0,
       pesosIAWeekday: stats.pesosIAWeekday || null,
       pesosIAWeekend: stats.pesosIAWeekend || null,
       cuantico: cache.riesgos.cuantico || null
