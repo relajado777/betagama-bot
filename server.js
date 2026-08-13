@@ -2400,192 +2400,204 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
         return isMatch;
       });
 
-      let hotHits = 0;
-      let coldHits = 0;
-      let fijosHits = 0;
-      let totalEvaluated = 0;
-      let totalFijosEvaluated = 0;
-
+      // Agrupar sorteos por fecha para evaluar tasa de éxito diaria
+      const drawsByDate = {};
       testDraws.forEach(s => {
-        const idx = sortedByRecency.indexOf(s);
-        if (idx === -1) return;
+        if (!drawsByDate[s.fecha]) drawsByDate[s.fecha] = [];
+        drawsByDate[s.fecha].push(s);
+      });
 
-        // Obtener los 120 sorteos anteriores a este sorteo
-        const prevDraws = sortedByRecency.slice(idx + 1).filter(prev => {
-          const normSorteo = prev.loteria.toLowerCase().trim().replace(/\s+/g, '_');
-          const normInput = loteriaId ? loteriaId.toLowerCase().trim().replace(/\s+/g, '_') : '';
-          if (!normInput) return true;
-          return normSorteo === normInput || 
-                 (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
-                 (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
-                 (normSorteo === 'granja' && normInput === 'la_granjita') ||
-                 (normSorteo === 'la_granjita' && normInput === 'granja') ||
-                 (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
-                 (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
-                 (normSorteo === 'selva' && normInput === 'selva_plus') ||
-                 (normSorteo === 'selva_plus' && normInput === 'selva') ||
-                 (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
-                 (normSorteo === 'el_guacharito' && normInput === 'guacharito');
-        }).slice(0, 120);
+      let hotHitDays = 0;
+      let coldHitDays = 0;
+      let fijosHitDays = 0;
+      let totalDaysEvaluated = 0;
 
-        if (prevDraws.length >= 15) { // Al menos 15 sorteos previos para que tenga sentido calcular
-          // Frecuencias
-          const localFreq = {};
-          for (const num of Object.keys(targetAnimalMap)) {
-            localFreq[num] = 0;
-          }
-          prevDraws.forEach(prev => {
-            const num = obtenerCodigoResultado(prev.resultado);
-            if (num && localFreq[num] !== undefined) {
-              localFreq[num]++;
+      Object.entries(drawsByDate).forEach(([fecha, draws]) => {
+        totalDaysEvaluated++;
+        let hotHitFound = false;
+        let coldHitFound = false;
+        let fijosHitFound = false;
+
+        draws.forEach(s => {
+          const idx = sortedByRecency.indexOf(s);
+          if (idx === -1) return;
+
+          // Obtener los 120 sorteos anteriores a este sorteo
+          const prevDraws = sortedByRecency.slice(idx + 1).filter(prev => {
+            const normSorteo = prev.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+            const normInput = loteriaId ? loteriaId.toLowerCase().trim().replace(/\s+/g, '_') : '';
+            if (!normInput) return true;
+            return normSorteo === normInput || 
+                   (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
+                   (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
+                   (normSorteo === 'granja' && normInput === 'la_granjita') ||
+                   (normSorteo === 'la_granjita' && normInput === 'granja') ||
+                   (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
+                   (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
+                   (normSorteo === 'selva' && normInput === 'selva_plus') ||
+                   (normSorteo === 'selva_plus' && normInput === 'selva') ||
+                   (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
+                   (normSorteo === 'el_guacharito' && normInput === 'guacharito');
+          }).slice(0, 120);
+
+          if (prevDraws.length >= 15) {
+            // Frecuencias
+            const localFreq = {};
+            for (const num of Object.keys(targetAnimalMap)) {
+              localFreq[num] = 0;
             }
-          });
+            prevDraws.forEach(prev => {
+              const num = obtenerCodigoResultado(prev.resultado);
+              if (num && localFreq[num] !== undefined) {
+                localFreq[num]++;
+              }
+            });
 
-          // Cargar pesos correspondientes a la fecha del sorteo evaluado
-          const periodoS = obtenerLlavePeriodo(s.fecha);
-          const w_s = cache.riesgos.pesosIA[normLotId + periodoS] || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+            // Cargar pesos correspondientes a la fecha del sorteo evaluado
+            const periodoS = obtenerLlavePeriodo(s.fecha);
+            const w_s = cache.riesgos.pesosIA[normLotId + periodoS] || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
 
-          // 1. Hotness Score (Frecuencia)
-          const localSumFreq = Object.values(localFreq).reduce((a, b) => a + b, 0) || 1;
-          const s_hot_local = {};
-          Object.keys(targetAnimalMap).forEach(k => {
-            s_hot_local[k] = localFreq[k] / localSumFreq;
-          });
+            // 1. Hotness Score (Frecuencia)
+            const localSumFreq = Object.values(localFreq).reduce((a, b) => a + b, 0) || 1;
+            const s_hot_local = {};
+            Object.keys(targetAnimalMap).forEach(k => {
+              s_hot_local[k] = localFreq[k] / localSumFreq;
+            });
 
-          // 2. Coldness Score (Atrasos)
-          const localDelays = {};
-          for (const num of Object.keys(targetAnimalMap)) {
-            localDelays[num] = 9999;
-          }
-          prevDraws.forEach((prev, index) => {
-            const code = obtenerCodigoResultado(prev.resultado);
-            if (code && localDelays[code] === 9999) {
-              localDelays[code] = index;
+            // 2. Coldness Score (Atrasos)
+            const localDelays = {};
+            for (const num of Object.keys(targetAnimalMap)) {
+              localDelays[num] = 9999;
             }
-          });
-          const localSumDelay = Object.values(localDelays).reduce((a, b) => a + b, 0) || 1;
-          const s_cold_local = {};
-          Object.keys(targetAnimalMap).forEach(k => {
-            s_cold_local[k] = localDelays[k] / localSumDelay;
-          });
+            prevDraws.forEach((prev, index) => {
+              const code = obtenerCodigoResultado(prev.resultado);
+              if (code && localDelays[code] === 9999) {
+                localDelays[code] = index;
+              }
+            });
+            const localSumDelay = Object.values(localDelays).reduce((a, b) => a + b, 0) || 1;
+            const s_cold_local = {};
+            Object.keys(targetAnimalMap).forEach(k => {
+              s_cold_local[k] = localDelays[k] / localSumDelay;
+            });
 
-          const localUltimoResultado = obtenerCodigoResultado(prevDraws[0].resultado);
+            const localUltimoResultado = obtenerCodigoResultado(prevDraws[0].resultado);
 
-          // 3. Markov Score (Transición)
-          const localTransitionCounts = {};
-          for (const num of Object.keys(targetAnimalMap)) {
-            localTransitionCounts[num] = 0;
-          }
-          let localTotalTransitions = 0;
-          const localNumAnimals = Object.keys(targetAnimalMap).length || 1;
-          if (localUltimoResultado) {
-            for (let i = 0; i < prevDraws.length - 1; i++) {
-              const prevWinner = obtenerCodigoResultado(prevDraws[i + 1].resultado);
-              const currentWinner = obtenerCodigoResultado(prevDraws[i].resultado);
-              if (prevWinner === localUltimoResultado && currentWinner && localTransitionCounts[currentWinner] !== undefined) {
-                localTransitionCounts[currentWinner]++;
-                localTotalTransitions++;
+            // 3. Markov Score (Transición)
+            const localTransitionCounts = {};
+            for (const num of Object.keys(targetAnimalMap)) {
+              localTransitionCounts[num] = 0;
+            }
+            let localTotalTransitions = 0;
+            const localNumAnimals = Object.keys(targetAnimalMap).length || 1;
+            if (localUltimoResultado) {
+              for (let i = 0; i < prevDraws.length - 1; i++) {
+                const prevWinner = obtenerCodigoResultado(prevDraws[i + 1].resultado);
+                const currentWinner = obtenerCodigoResultado(prevDraws[i].resultado);
+                if (prevWinner === localUltimoResultado && currentWinner && localTransitionCounts[currentWinner] !== undefined) {
+                  localTransitionCounts[currentWinner]++;
+                  localTotalTransitions++;
+                }
               }
             }
-          }
-          const s_markov_local = {};
-          const localDefaultProb = 1 / localNumAnimals;
-          Object.keys(targetAnimalMap).forEach(k => {
-            s_markov_local[k] = localTotalTransitions > 0 ? (localTransitionCounts[k] / localTotalTransitions) : localDefaultProb;
-          });
-
-          // 4. Combined Hybrid Score local
-          const localCombinedScores = Object.entries(targetAnimalMap).map(([num, name]) => {
-            const sh = s_hot_local[num] || 0;
-            const sc = s_cold_local[num] || 0;
-            const sm = s_markov_local[num] || 0;
-            const combined = w_s.w_hot * sh + w_s.w_cold * sc + w_s.w_markov * sm;
-            return {
-              numero: num,
-              score: combined
-            };
-          }).sort((a, b) => b.score - a.score);
-
-          const localCombinedFiltrados = localUltimoResultado
-            ? localCombinedScores.filter(f => f.numero !== localUltimoResultado)
-            : localCombinedScores;
-
-          const localCalientes = localCombinedFiltrados.slice(0, 5).map(f => f.numero);
-
-          // Calcular atrasados tradicionales (para el porcentaje de atrasados tradicional)
-          const localSortedColds = Object.entries(localDelays).map(([num, score]) => ({
-            numero: num,
-            atraso: score
-          })).sort((a, b) => b.atraso - a.atraso);
-
-          const localAtrasados = localSortedColds.slice(0, 5).map(f => f.numero);
-
-          // Calcular Fijos del día para este sorteo (basado en días anteriores)
-          const prevDrawsBeforeDay = prevDraws.filter(prev => prev.fecha < s.fecha);
-          const fijos120 = prevDrawsBeforeDay.slice(0, 120);
-          
-          let localFijos = [];
-          if (fijos120.length >= 15) {
-            const freqF = {};
-            Object.keys(targetAnimalMap).forEach(k => { freqF[k] = 0; });
-            fijos120.forEach(prev => {
-              const num = obtenerCodigoResultado(prev.resultado);
-              if (num && freqF[num] !== undefined) freqF[num]++;
+            const s_markov_local = {};
+            const localDefaultProb = 1 / localNumAnimals;
+            Object.keys(targetAnimalMap).forEach(k => {
+              s_markov_local[k] = localTotalTransitions > 0 ? (localTransitionCounts[k] / localTotalTransitions) : localDefaultProb;
             });
-            const sumFreqF = Object.values(freqF).reduce((a, b) => a + b, 0) || 1;
-            const s_hot_f = {};
-            Object.keys(targetAnimalMap).forEach(k => { s_hot_f[k] = freqF[k] / sumFreqF; });
 
-            const delaysF = {};
-            Object.keys(targetAnimalMap).forEach(k => { delaysF[k] = 9999; });
-            fijos120.forEach((prev, idx) => {
-              const code = obtenerCodigoResultado(prev.resultado);
-              if (code && delaysF[code] === 9999) delaysF[code] = idx;
-            });
-            const sumDelayF = Object.values(delaysF).reduce((a, b) => a + b, 0) || 1;
-            const s_cold_f = {};
-            Object.keys(targetAnimalMap).forEach(k => { s_cold_f[k] = delaysF[k] / sumDelayF; });
-
-            const sumW_s = (w_s.w_hot + w_s.w_cold) || 1;
-            const w_hot_norm = w_s.w_hot / sumW_s;
-            const w_cold_norm = w_s.w_cold / sumW_s;
-
-            const scoresF = Object.entries(targetAnimalMap).map(([num, name]) => {
-              const sh = s_hot_f[num] || 0;
-              const sc = s_cold_f[num] || 0;
-              const combined = w_hot_norm * sh + w_cold_norm * sc;
+            // 4. Combined Hybrid Score local
+            const localCombinedScores = Object.entries(targetAnimalMap).map(([num, name]) => {
+              const sh = s_hot_local[num] || 0;
+              const sc = s_cold_local[num] || 0;
+              const sm = s_markov_local[num] || 0;
+              const combined = w_s.w_hot * sh + w_s.w_cold * sc + w_s.w_markov * sm;
               return {
                 numero: num,
                 score: combined
               };
             }).sort((a, b) => b.score - a.score);
 
-            const ultimoAyer = fijos120.length > 0 ? obtenerCodigoResultado(fijos120[0].resultado) : null;
-            const scoresFijosFiltrados = ultimoAyer
-              ? scoresF.filter(f => f.numero !== ultimoAyer)
-              : scoresF;
+            const localCombinedFiltrados = localUltimoResultado
+              ? localCombinedScores.filter(f => f.numero !== localUltimoResultado)
+              : localCombinedScores;
+
+            const localCalientes = localCombinedFiltrados.slice(0, 5).map(f => f.numero);
+
+            // Calcular atrasados tradicionales (para el porcentaje de atrasados tradicional)
+            const localSortedColds = Object.entries(localDelays).map(([num, score]) => ({
+              numero: num,
+              atraso: score
+            })).sort((a, b) => b.atraso - a.atraso);
+
+            const localAtrasados = localSortedColds.slice(0, 5).map(f => f.numero);
+
+            // Calcular Fijos del día para este sorteo (basado en días anteriores)
+            const prevDrawsBeforeDay = prevDraws.filter(prev => prev.fecha < s.fecha);
+            const fijos120 = prevDrawsBeforeDay.slice(0, 120);
             
-            localFijos = scoresFijosFiltrados.slice(0, 5).map(f => f.numero);
-          }
+            let localFijos = [];
+            if (fijos120.length >= 15) {
+              const freqF = {};
+              Object.keys(targetAnimalMap).forEach(k => { freqF[k] = 0; });
+              fijos120.forEach(prev => {
+                const num = obtenerCodigoResultado(prev.resultado);
+                if (num && freqF[num] !== undefined) freqF[num]++;
+              });
+              const sumFreqF = Object.values(freqF).reduce((a, b) => a + b, 0) || 1;
+              const s_hot_f = {};
+              Object.keys(targetAnimalMap).forEach(k => { s_hot_f[k] = freqF[k] / sumFreqF; });
 
-          // Evaluar acierto
-          const resultNum = obtenerCodigoResultado(s.resultado);
-          if (resultNum) {
-            if (localCalientes.includes(resultNum)) hotHits++;
-            if (localAtrasados.includes(resultNum)) coldHits++;
-            totalEvaluated++;
+              const delaysF = {};
+              Object.keys(targetAnimalMap).forEach(k => { delaysF[k] = 9999; });
+              fijos120.forEach((prev, idx) => {
+                const code = obtenerCodigoResultado(prev.resultado);
+                if (code && delaysF[code] === 9999) delaysF[code] = idx;
+              });
+              const sumDelayF = Object.values(delaysF).reduce((a, b) => a + b, 0) || 1;
+              const s_cold_f = {};
+              Object.keys(targetAnimalMap).forEach(k => { s_cold_f[k] = delaysF[k] / sumDelayF; });
 
-            if (localFijos.length > 0) {
-              if (localFijos.includes(resultNum)) fijosHits++;
-              totalFijosEvaluated++;
+              const sumW_s = (w_s.w_hot + w_s.w_cold) || 1;
+              const w_hot_norm = w_s.w_hot / sumW_s;
+              const w_cold_norm = w_s.w_cold / sumW_s;
+
+              const scoresF = Object.entries(targetAnimalMap).map(([num, name]) => {
+                const sh = s_hot_f[num] || 0;
+                const sc = s_cold_f[num] || 0;
+                const combined = w_hot_norm * sh + w_cold_norm * sc;
+                return {
+                  numero: num,
+                  score: combined
+                };
+              }).sort((a, b) => b.score - a.score);
+
+              const ultimoAyer = fijos120.length > 0 ? obtenerCodigoResultado(fijos120[0].resultado) : null;
+              const scoresFijosFiltrados = ultimoAyer
+                ? scoresF.filter(f => f.numero !== ultimoAyer)
+                : scoresF;
+              
+              localFijos = scoresFijosFiltrados.slice(0, 5).map(f => f.numero);
+            }
+
+            // Evaluar acierto
+            const resultNum = obtenerCodigoResultado(s.resultado);
+            if (resultNum) {
+              if (localCalientes.includes(resultNum)) hotHitFound = true;
+              if (localAtrasados.includes(resultNum)) coldHitFound = true;
+              if (localFijos.length > 0 && localFijos.includes(resultNum)) fijosHitFound = true;
             }
           }
-        }
+        });
+
+        if (hotHitFound) hotHitDays++;
+        if (coldHitFound) coldHitDays++;
+        if (fijosHitFound) fijosHitDays++;
       });
 
-      aciertoCalientesSemana = totalEvaluated > 0 ? Math.round((hotHits / totalEvaluated) * 100) : 0;
-      aciertoAtrasadosSemana = totalEvaluated > 0 ? Math.round((coldHits / totalEvaluated) * 100) : 0;
-      aciertoFijosSemana = totalFijosEvaluated > 0 ? Math.round((fijosHits / totalFijosEvaluated) * 100) : 0;
+      aciertoCalientesSemana = totalDaysEvaluated > 0 ? Math.round((hotHitDays / totalDaysEvaluated) * 100) : 0;
+      aciertoAtrasadosSemana = totalDaysEvaluated > 0 ? Math.round((coldHitDays / totalDaysEvaluated) * 100) : 0;
+      aciertoFijosSemana = totalDaysEvaluated > 0 ? Math.round((fijosHitDays / totalDaysEvaluated) * 100) : 0;
     } catch (backtestErr) {
       console.error("Error al calcular backtesting semanal:", backtestErr);
     }
