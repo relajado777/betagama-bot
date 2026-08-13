@@ -2223,10 +2223,131 @@ async function obtenerEstadisticasRiesgo(loteriaId) {
     // Los 5 animales más atrasados (fríos)
     const atrasados = listaAtrasados.slice(0, 5).map(f => f.numero);
 
+    // === CÁLCULO DE ACIERTOS HISTÓRICOS SEMANALES (BACKTESTING EN MEMORIA) ===
+    let aciertoCalientesSemana = 0;
+    let aciertoAtrasadosSemana = 0;
+    
+    try {
+      const today = new Date();
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
+      // Sorteos de esta lotería en los últimos 7 días con resultado
+      const testDraws = sortedByRecency.filter(s => {
+        if (s.fecha < sevenDaysAgoStr) return false;
+        if (!s.resultado) return false;
+        
+        const normSorteo = s.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+        const normInput = loteriaId ? loteriaId.toLowerCase().trim().replace(/\s+/g, '_') : '';
+        
+        // Comparar lotería
+        const isMatch = !normInput || normSorteo === normInput || 
+               (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
+               (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
+               (normSorteo === 'granja' && normInput === 'la_granjita') ||
+               (normSorteo === 'la_granjita' && normInput === 'granja') ||
+               (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
+               (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
+               (normSorteo === 'selva' && normInput === 'selva_plus') ||
+               (normSorteo === 'selva_plus' && normInput === 'selva') ||
+               (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
+               (normSorteo === 'el_guacharito' && normInput === 'guacharito');
+        return isMatch;
+      });
+
+      let hotHits = 0;
+      let coldHits = 0;
+      let totalEvaluated = 0;
+
+      testDraws.forEach(s => {
+        const idx = sortedByRecency.indexOf(s);
+        if (idx === -1) return;
+
+        // Obtener los 120 sorteos anteriores a este sorteo
+        const prevDraws = sortedByRecency.slice(idx + 1).filter(prev => {
+          const normSorteo = prev.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+          const normInput = loteriaId ? loteriaId.toLowerCase().trim().replace(/\s+/g, '_') : '';
+          if (!normInput) return true;
+          return normSorteo === normInput || 
+                 (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
+                 (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
+                 (normSorteo === 'granja' && normInput === 'la_granjita') ||
+                 (normSorteo === 'la_granjita' && normInput === 'granja') ||
+                 (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
+                 (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
+                 (normSorteo === 'selva' && normInput === 'selva_plus') ||
+                 (normSorteo === 'selva_plus' && normInput === 'selva') ||
+                 (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
+                 (normSorteo === 'el_guacharito' && normInput === 'guacharito');
+        }).slice(0, 120);
+
+        if (prevDraws.length >= 15) { // Al menos 15 sorteos previos para que tenga sentido calcular
+          // Frecuencias
+          const localFreq = {};
+          for (const num of Object.keys(targetAnimalMap)) {
+            localFreq[num] = 0;
+          }
+          prevDraws.forEach(prev => {
+            const num = obtenerCodigoResultado(prev.resultado);
+            if (num && localFreq[num] !== undefined) {
+              localFreq[num]++;
+            }
+          });
+
+          const localSortedFreqs = Object.entries(localFreq).map(([num, count]) => ({
+            numero: num,
+            frecuencia: count
+          })).sort((a, b) => b.frecuencia - a.frecuencia);
+
+          const localUltimoResultado = obtenerCodigoResultado(prevDraws[0].resultado);
+          const localFilteredFreqs = localUltimoResultado 
+            ? localSortedFreqs.filter(f => f.numero !== localUltimoResultado)
+            : localSortedFreqs;
+
+          const localCalientes = localFilteredFreqs.slice(0, 5).map(f => f.numero);
+
+          // Atrasados
+          const localColdScores = {};
+          for (const num of Object.keys(targetAnimalMap)) {
+            localColdScores[num] = 9999;
+          }
+          prevDraws.forEach((prev, index) => {
+            const code = obtenerCodigoResultado(prev.resultado);
+            if (code && localColdScores[code] === 9999) {
+              localColdScores[code] = index;
+            }
+          });
+
+          const localSortedColds = Object.entries(localColdScores).map(([num, score]) => ({
+            numero: num,
+            atraso: score
+          })).sort((a, b) => b.atraso - a.atraso);
+
+          const localAtrasados = localSortedColds.slice(0, 5).map(f => f.numero);
+
+          // Evaluar acierto
+          const resultNum = obtenerCodigoResultado(s.resultado);
+          if (resultNum) {
+            if (localCalientes.includes(resultNum)) hotHits++;
+            if (localAtrasados.includes(resultNum)) coldHits++;
+            totalEvaluated++;
+          }
+        }
+      });
+
+      aciertoCalientesSemana = totalEvaluated > 0 ? Math.round((hotHits / totalEvaluated) * 100) : 0;
+      aciertoAtrasadosSemana = totalEvaluated > 0 ? Math.round((coldHits / totalEvaluated) * 100) : 0;
+    } catch (backtestErr) {
+      console.error("Error al calcular backtesting semanal:", backtestErr);
+    }
+
     return {
       listaFrecuencias,
       calientes,
-      atrasados
+      atrasados,
+      aciertoCalientesSemana,
+      aciertoAtrasadosSemana
     };
   } catch (error) {
     console.error("Error al calcular estadísticas de riesgo:", error);
@@ -2359,6 +2480,8 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
       listaFrecuencias: stats.listaFrecuencias,
       calientes: stats.calientes,
       atrasados: stats.atrasados || [],
+      aciertoCalientesSemana: stats.aciertoCalientesSemana || 0,
+      aciertoAtrasadosSemana: stats.aciertoAtrasadosSemana || 0,
       cuantico: cache.riesgos.cuantico || null
     });
   } catch (error) {

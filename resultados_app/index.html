@@ -2099,7 +2099,7 @@
         }
 
         // 4. Animales Calientes (Top 5 más salidores)
-        html += `<div class="riesgo-section-title">🔥 Animales Calientes (Auto-limitados)</div>`;
+        html += `<div class="riesgo-section-title">🔥 Animales Calientes (Auto-limitados) &nbsp;<span style="font-size: 0.8rem; color: #f97316; background: rgba(249, 115, 22, 0.1); padding: 0.2rem 0.5rem; border-radius: 6px;">Acierto Semanal: <strong>${data.aciertoCalientesSemana || 0}%</strong></span></div>`;
         const hotList = data.calientes || [];
         if (hotList.length === 0) {
           html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay estadísticas de calientes registradas en los sorteos recientes.</p>`;
@@ -2119,7 +2119,7 @@
         }
 
         // 5. Animales Atrasados (Top 5 con mayor retraso)
-        html += `<div class="riesgo-section-title">❄️ Animales Fríos / Atrasados</div>`;
+        html += `<div class="riesgo-section-title">❄️ Animales Fríos / Atrasados &nbsp;<span style="font-size: 0.8rem; color: #3b82f6; background: rgba(59, 130, 246, 0.1); padding: 0.2rem 0.5rem; border-radius: 6px;">Acierto Semanal: <strong>${data.aciertoAtrasadosSemana || 0}%</strong></span></div>`;
         const coldList = data.atrasados || [];
         if (coldList.length === 0) {
           html += `<p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay estadísticas de atrasados registradas.</p>`;
