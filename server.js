@@ -56,6 +56,27 @@ import { initTelegramBot } from './services/telegram.js';
 
 let telegramBot = null;
 
+// Función utilitaria global para parsear hora en formato "09:00am" a minutos
+const parseTimeToMinutes = (h) => {
+  if (!h) return 0;
+  const matches = h.match(/(\d+):(\d+)(am|pm)/i);
+  if (!matches) return 0;
+  let hr = parseInt(matches[1], 10);
+  const min = parseInt(matches[2], 10);
+  const meridiano = matches[3].toLowerCase();
+  if (meridiano === 'pm' && hr < 12) hr += 12;
+  if (meridiano === 'am' && hr === 12) hr = 0;
+  return hr * 60 + min;
+};
+
+// Función utilitaria global para obtener el código de animal (ej: "(#12)" -> "12")
+const obtenerCodigoResultado = (resStr) => {
+  if (!resStr) return '';
+  const match = resStr.match(/\(#(\d+)\)/);
+  if (match) return match[1];
+  return resStr.trim();
+};
+
 const { Client, LocalAuth } = pkg;
 
 dotenv.config();
