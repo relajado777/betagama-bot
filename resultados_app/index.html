@@ -1120,27 +1120,92 @@
               <option value="el_guacharito" style="background: var(--bg-card); color: var(--text-main);">El Guacharito</option>
             </select>
           </div>
-          <button onclick="exportarRiesgosExcel()" style="
-            background: #10b981;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0.45rem 1rem;
-            font-size: 0.82rem;
-            font-family: 'Outfit', sans-serif;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
-            transition: all 0.2s ease;
-          " onmouseover="this.style.background='#0d9488'" onmouseout="this.style.background='#10b981'">
-            📊 Exportar Excel
-          </button>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button onclick="openAuditoriaModal()" style="
+              background: #3b82f6;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              padding: 0.45rem 1rem;
+              font-size: 0.82rem;
+              font-family: 'Outfit', sans-serif;
+              font-weight: 600;
+              cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              gap: 0.4rem;
+              box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+              transition: all 0.2s ease;
+            " onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+              🔍 Analizar Rendimiento
+            </button>
+            <button onclick="exportarRiesgosExcel()" style="
+              background: #10b981;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              padding: 0.45rem 1rem;
+              font-size: 0.82rem;
+              font-family: 'Outfit', sans-serif;
+              font-weight: 600;
+              cursor: pointer;
+              display: inline-flex;
+              align-items: center;
+              gap: 0.4rem;
+              box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+              transition: all 0.2s ease;
+            " onmouseover="this.style.background='#0d9488'" onmouseout="this.style.background='#10b981'">
+              📊 Exportar Excel
+            </button>
+          </div>
         </div>
         <div id="riesgos-modal-body-content">
           <div style="text-align: center; padding: 2rem; color: var(--text-muted);">Cargando configuración...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Auditoría de Rendimiento -->
+  <div id="auditoria-modal" class="modal-overlay" onclick="handleAuditoriaOverlayClick(event)">
+    <div class="modal-content" style="max-width: 800px; width: 90%;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main); font-family: 'Outfit', sans-serif;">
+          🔍 Auditoría y Eficiencia de la IA
+        </h3>
+        <button class="close-btn" onclick="closeAuditoriaModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; gap: 1rem; flex-wrap: wrap;">
+          <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);" id="auditoria-loteria-titulo">
+            Lotería: Lotto Activo
+          </div>
+          <div style="display: flex; gap: 0.5rem; background: rgba(0,0,0,0.05); padding: 0.2rem; border-radius: 8px;">
+            <button onclick="setAuditoriaTab('horas')" id="tab-btn-horas" style="
+              border: none;
+              padding: 0.4rem 0.8rem;
+              font-size: 0.8rem;
+              font-family: inherit;
+              font-weight: 600;
+              border-radius: 6px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            ">📈 Horas Calientes</button>
+            <button onclick="setAuditoriaTab('historial')" id="tab-btn-historial" style="
+              border: none;
+              padding: 0.4rem 0.8rem;
+              font-size: 0.8rem;
+              font-family: inherit;
+              font-weight: 600;
+              border-radius: 6px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            ">📋 Historial de Aciertos</button>
+          </div>
+        </div>
+
+        <div id="auditoria-modal-body-content" style="max-height: 480px; overflow-y: auto; padding-right: 0.2rem;">
+          <div style="text-align: center; padding: 2rem; color: var(--text-muted);">Cargando datos...</div>
         </div>
       </div>
     </div>
@@ -2031,6 +2096,197 @@
         sec.classList.remove('active-tv');
         sec.style.display = '';
       });
+    }
+
+    // --- LÓGICA DE MODAL DE AUDITORÍA Y EFICIENCIA ---
+    let currentAuditoriaTab = 'horas';
+    let auditoriaDataCache = null;
+
+    function openAuditoriaModal() {
+      // Mostrar modal
+      document.getElementById('auditoria-modal').classList.add('active');
+      
+      // Obtener nombre formateado de la loteria seleccionada
+      const select = document.getElementById('riesgos-loteria-select');
+      const targetLotName = select.options[select.selectedIndex].text;
+      document.getElementById('auditoria-loteria-titulo').innerHTML = `Lotería: <strong>${targetLotName}</strong> (Últimos 30 días)`;
+      
+      // Resetear caché y cargar
+      auditoriaDataCache = null;
+      currentAuditoriaTab = 'horas';
+      cargarAuditoriaDatos();
+    }
+
+    function closeAuditoriaModal() {
+      document.getElementById('auditoria-modal').classList.remove('active');
+    }
+
+    function handleAuditoriaOverlayClick(event) {
+      if (event.target.id === 'auditoria-modal') {
+        closeAuditoriaModal();
+      }
+    }
+
+    async function cargarAuditoriaDatos() {
+      const select = document.getElementById('riesgos-loteria-select');
+      const targetLot = select.value;
+      const contentDiv = document.getElementById('auditoria-modal-body-content');
+      
+      contentDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="spinner" style="margin: 0 auto 1rem;"></div>Analizando base de datos...</div>';
+
+      try {
+        const url = `${API_BASE}/api/configuracion/riesgos/auditoria?loteria=${targetLot}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al cargar datos de auditoría');
+        
+        auditoriaDataCache = await response.json();
+        renderAuditoriaTab();
+      } catch (err) {
+        contentDiv.innerHTML = `<p style="text-align: center; padding: 2rem; color: #ef4444; font-weight: 500;">❌ Error: ${err.message}</p>`;
+      }
+    }
+
+    function setAuditoriaTab(tab) {
+      currentAuditoriaTab = tab;
+      renderAuditoriaTab();
+    }
+
+    function renderAuditoriaTab() {
+      if (!auditoriaDataCache) return;
+      
+      const contentDiv = document.getElementById('auditoria-modal-body-content');
+      const tabHoras = document.getElementById('tab-btn-horas');
+      const tabHistorial = document.getElementById('tab-btn-historial');
+      
+      // Estilos activos para botones de pestañas
+      const activeStyle = 'background: var(--color-primary); color: white;';
+      const inactiveStyle = 'background: transparent; color: var(--text-muted);';
+      
+      if (currentAuditoriaTab === 'horas') {
+        tabHoras.style = activeStyle;
+        tabHistorial.style = inactiveStyle;
+        
+        let html = '';
+        const stats = auditoriaDataCache.hourlyStats || [];
+        
+        if (stats.length === 0) {
+          html += '<p style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay suficientes sorteos históricos para esta lotería.</p>';
+        } else {
+          html += `
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem;">
+                Muestra de eficiencia real de la IA agrupada por horario de sorteo en los últimos 30 días:
+              </p>
+          `;
+          
+          stats.forEach(h => {
+            const pct = h.pctCalientes || 0;
+            // Definir color de la barra según efectividad
+            let color = '#3b82f6'; // Azul por defecto
+            if (pct >= 60) color = '#10b981'; // Verde (excelente)
+            else if (pct >= 40) color = '#f97316'; // Naranja (moderado)
+            else color = '#6b7280'; // Gris
+            
+            html += `
+              <div style="background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.04); padding: 0.8rem; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: bold; margin-bottom: 0.4rem;">
+                  <span>⏰ Sorteo de las ${h.hora}</span>
+                  <span style="color: ${color};">${pct}% de Eficiencia (${h.hitsCalientes} de ${h.total} aciertos)</span>
+                </div>
+                <div style="width: 100%; background: rgba(0,0,0,0.08); height: 10px; border-radius: 5px; overflow: hidden; display: flex;">
+                  <div style="width: ${pct}%; background: ${color}; height: 100%; transition: width 0.5s ease;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem;">
+                  <span>Fijos: ${h.pctFijos || 0}% de acierto</span>
+                  <span>Atrasados: ${h.pctAtrasados || 0}% de acierto</span>
+                </div>
+              </div>
+            `;
+          });
+          html += '</div>';
+        }
+        
+        contentDiv.innerHTML = html;
+      } else {
+        tabHoras.style = inactiveStyle;
+        tabHistorial.style = activeStyle;
+        
+        let html = '';
+        const history = auditoriaDataCache.history || [];
+        
+        if (history.length === 0) {
+          html += '<p style="text-align: center; padding: 2rem; color: var(--text-muted);">No hay sorteos recientes registrados.</p>';
+        } else {
+          html += `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: left;">
+              <thead>
+                <tr style="border-bottom: 2px solid rgba(0,0,0,0.08); color: var(--text-muted); font-weight: bold;">
+                  <th style="padding: 0.6rem 0.4rem;">Sorteo</th>
+                  <th style="padding: 0.6rem 0.4rem;">Ganador</th>
+                  <th style="padding: 0.6rem 0.4rem;">Calientes (IA)</th>
+                  <th style="padding: 0.6rem 0.4rem;">Fijos</th>
+                  <th style="padding: 0.6rem 0.4rem;">Atrasados</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+          
+          history.forEach(item => {
+            const formatName = (num) => {
+              const name = ANIMAL_NUMEROS[num] || 'Desconocido';
+              const emoji = ANIMAL_EMOJIS[name] || '🐾';
+              return `${emoji} ${name} #${num}`;
+            };
+            
+            const renderBadge = (isHit) => {
+              if (isHit) {
+                return `<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: bold; font-size: 0.72rem;">💥 ACERTADO</span>`;
+              }
+              return `<span style="color: var(--text-muted); font-size: 0.72rem; opacity: 0.6;">fallado</span>`;
+            };
+
+            const formatDate = (d) => {
+              const pts = d.split('-');
+              return `${pts[2]}/${pts[1]}`;
+            };
+
+            html += `
+              <tr style="border-bottom: 1px solid rgba(0,0,0,0.04); transition: background 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.01)'" onmouseout="this.style.background='transparent'">
+                <td style="padding: 0.6rem 0.4rem;">
+                  <div style="font-weight: bold;">${item.hora}</div>
+                  <div style="font-size: 0.7rem; color: var(--text-muted);">${formatDate(item.fecha)}</div>
+                </td>
+                <td style="padding: 0.6rem 0.4rem; font-weight: bold; color: var(--color-primary);">${item.resultado}</td>
+                <td style="padding: 0.6rem 0.4rem;">
+                  <div style="display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div>${renderBadge(item.hitCaliente)}</div>
+                    <div style="font-size: 0.68rem; color: var(--text-muted); width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.calientes.map(formatName).join(', ')}">${item.calientes.join(', ')}</div>
+                  </div>
+                </td>
+                <td style="padding: 0.6rem 0.4rem;">
+                  <div style="display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div>${renderBadge(item.hitFijo)}</div>
+                    <div style="font-size: 0.68rem; color: var(--text-muted); width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.fijos.map(formatName).join(', ')}">${item.fijos.join(', ')}</div>
+                  </div>
+                </td>
+                <td style="padding: 0.6rem 0.4rem;">
+                  <div style="display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div>${renderBadge(item.hitAtrasado)}</div>
+                    <div style="font-size: 0.68rem; color: var(--text-muted); width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.atrasados.map(formatName).join(', ')}">${item.atrasados.join(', ')}</div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          });
+          
+          html += `
+              </tbody>
+            </table>
+          `;
+        }
+        
+        contentDiv.innerHTML = html;
+      }
     }
 
     // --- LÓGICA DE MODAL DE CONTROL DE RIESGOS ---

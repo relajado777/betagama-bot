@@ -2937,6 +2937,253 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
   }
 });
 
+// Obtener datos detallados de auditoría de riesgos para el dashboard
+app.get('/api/configuracion/riesgos/auditoria', async (req, res) => {
+  const { loteria } = req.query;
+  if (!loteria) {
+    return res.status(400).json({ error: "Debe especificar la lotería" });
+  }
+
+  try {
+    const loteriaId = loteria;
+    const normInput = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+    
+    let targetLoteriaMap = ANIMALITOS_MAP;
+    const matchedLot = cache.loterias.find(l => {
+      const normName = l.nombre.toLowerCase().trim().replace(/\s+/g, '_');
+      const normId = l.id.toLowerCase().trim().replace(/\s+/g, '_');
+      return normName === normInput || normId === normInput ||
+             (normName === 'lotto' && normInput === 'lotto_activo') ||
+             (normName === 'lotto_activo' && normInput === 'lotto') ||
+             (normName === 'granja' && normInput === 'la_granjita') ||
+             (normName === 'la_granjita' && normInput === 'granja') ||
+             (normName === 'guacharo' && normInput === 'guacharo_activo') ||
+             (normName === 'selva_plus' && normInput === 'selva') ||
+             (normName === 'el_guacharito' && normInput === 'guacharito');
+    });
+    if (matchedLot && matchedLot.animales && Object.keys(matchedLot.animales).length > 0) {
+      targetLoteriaMap = matchedLot.animales;
+    }
+
+    // Obtener todos los sorteos ordenados de más reciente a más antiguo
+    const sortedByRecency = [...cache.sorteos].sort((a, b) => {
+      if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
+      return parseTimeToMinutes(b.hora) - parseTimeToMinutes(a.hora);
+    });
+
+    const normLotId = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+
+    // Sorteos de esta lotería con resultado
+    const testDraws = sortedByRecency.filter(s => {
+      if (!s.resultado) return false;
+      const normSorteo = s.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+      const normInput = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+      return normSorteo === normInput || 
+             (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
+             (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
+             (normSorteo === 'granja' && normInput === 'la_granjita') ||
+             (normSorteo === 'la_granjita' && normInput === 'granja') ||
+             (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
+             (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
+             (normSorteo === 'selva' && normInput === 'selva_plus') ||
+             (normSorteo === 'selva_plus' && normInput === 'selva') ||
+             (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
+             (normSorteo === 'el_guacharito' && normInput === 'guacharito');
+    });
+
+    // Agrupar sorteos por fecha
+    const drawsByDate = {};
+    testDraws.forEach(s => {
+      if (!drawsByDate[s.fecha]) drawsByDate[s.fecha] = [];
+      drawsByDate[s.fecha].push(s);
+    });
+
+    // Tomar las últimas 30 fechas con sorteos para el análisis
+    const sortedDates = Object.keys(drawsByDate).sort((a, b) => b.localeCompare(a)).slice(0, 30);
+
+    const history = [];
+    const hourlyStats = {};
+
+    sortedDates.forEach(fecha => {
+      const draws = drawsByDate[fecha];
+      // Hallar el primer sorteo del día (el más antiguo en hora)
+      const sortedDraws = [...draws].sort((a, b) => parseTimeToMinutes(a.hora) - parseTimeToMinutes(b.hora));
+      const firstDrawOfDay = sortedDraws[0];
+      const idx = sortedByRecency.indexOf(firstDrawOfDay);
+      if (idx === -1) return;
+
+      // Sorteos históricos anteriores al primer sorteo de este día
+      const prevDraws = sortedByRecency.slice(idx + 1).filter(prev => {
+        const normSorteo = prev.loteria.toLowerCase().trim().replace(/\s+/g, '_');
+        const normInput = loteriaId.toLowerCase().trim().replace(/\s+/g, '_');
+        return normSorteo === normInput || 
+               (normSorteo === 'lotto' && normInput === 'lotto_activo') || 
+               (normSorteo === 'lotto_activo' && normInput === 'lotto') ||
+               (normSorteo === 'granja' && normInput === 'la_granjita') ||
+               (normSorteo === 'la_granjita' && normInput === 'granja') ||
+               (normSorteo === 'guacharo_activo' && normInput === 'guacharo') ||
+               (normSorteo === 'guacharo' && normInput === 'guacharo_activo') ||
+               (normSorteo === 'selva' && normInput === 'selva_plus') ||
+               (normSorteo === 'selva_plus' && normInput === 'selva') ||
+               (normSorteo === 'guacharito' && normInput === 'el_guacharito') ||
+               (normSorteo === 'el_guacharito' && normInput === 'guacharito');
+      }).slice(0, 120);
+
+      if (prevDraws.length >= 15) {
+        // Calcular predicciones para este día
+        const localFreq = {};
+        for (const num of Object.keys(targetLoteriaMap)) {
+          localFreq[num] = 0;
+        }
+        prevDraws.forEach(prev => {
+          const num = obtenerCodigoResultado(prev.resultado);
+          if (num && localFreq[num] !== undefined) localFreq[num]++;
+        });
+
+        const periodoS = obtenerLlavePeriodo(firstDrawOfDay.fecha);
+        const w_s = cache.riesgos.pesosIA[normLotId + periodoS] || { w_hot: 0.4, w_cold: 0.3, w_markov: 0.3 };
+
+        const localSumFreq = Object.values(localFreq).reduce((a, b) => a + b, 0) || 1;
+        const s_hot_local = {};
+        Object.keys(targetLoteriaMap).forEach(k => {
+          s_hot_local[k] = localFreq[k] / localSumFreq;
+        });
+
+        const localDelays = {};
+        for (const num of Object.keys(targetLoteriaMap)) {
+          localDelays[num] = 9999;
+        }
+        prevDraws.forEach((prev, index) => {
+          const code = obtenerCodigoResultado(prev.resultado);
+          if (code && localDelays[code] === 9999) localDelays[code] = index;
+        });
+        const localSumDelay = Object.values(localDelays).reduce((a, b) => a + b, 0) || 1;
+        const s_cold_local = {};
+        Object.keys(targetLoteriaMap).forEach(k => {
+          s_cold_local[k] = localDelays[k] / localSumDelay;
+        });
+
+        const localUltimoResultado = obtenerCodigoResultado(prevDraws[0].resultado);
+
+        // Markov
+        const localTransitionCounts = {};
+        for (const num of Object.keys(targetLoteriaMap)) {
+          localTransitionCounts[num] = 0;
+        }
+        let localTotalTransitions = 0;
+        const localNumAnimals = Object.keys(targetLoteriaMap).length || 1;
+        if (localUltimoResultado) {
+          for (let i = 0; i < prevDraws.length - 1; i++) {
+            const prevWinner = obtenerCodigoResultado(prevDraws[i + 1].resultado);
+            const currentWinner = obtenerCodigoResultado(prevDraws[i].resultado);
+            if (prevWinner === localUltimoResultado && currentWinner && localTransitionCounts[currentWinner] !== undefined) {
+              localTransitionCounts[currentWinner]++;
+              localTotalTransitions++;
+            }
+          }
+        }
+        const s_markov_local = {};
+        const localDefaultProb = 1 / localNumAnimals;
+        Object.keys(targetLoteriaMap).forEach(k => {
+          s_markov_local[k] = localTotalTransitions > 0 ? (localTransitionCounts[k] / localTotalTransitions) : localDefaultProb;
+        });
+
+        const localCombinedScores = Object.entries(targetLoteriaMap).map(([num, name]) => {
+          const sh = s_hot_local[num] || 0;
+          const sc = s_cold_local[num] || 0;
+          const sm = s_markov_local[num] || 0;
+          const combined = w_s.w_hot * sh + w_s.w_cold * sc + w_s.w_markov * sm;
+          return { numero: num, score: combined };
+        }).sort((a, b) => b.score - a.score);
+
+        const localCombinedFiltrados = localUltimoResultado
+          ? localCombinedScores.filter(f => f.numero !== localUltimoResultado)
+          : localCombinedScores;
+
+        const dailyCalientes = localCombinedFiltrados.slice(0, 5).map(f => f.numero);
+
+        const localSortedColds = Object.entries(localDelays).map(([num, score]) => ({
+          numero: num,
+          atraso: score
+        })).sort((a, b) => b.atraso - a.atraso);
+        const dailyAtrasados = localSortedColds.slice(0, 5).map(f => f.numero);
+
+        const sumW_s = (w_s.w_hot + w_s.w_cold) || 1;
+        const w_hot_norm = w_s.w_hot / sumW_s;
+        const w_cold_norm = w_s.w_cold / sumW_s;
+        const scoresF = Object.entries(targetLoteriaMap).map(([num, name]) => {
+          const sh = s_hot_local[num] || 0;
+          const sc = s_cold_local[num] || 0;
+          const combined = w_hot_norm * sh + w_cold_norm * sc;
+          return { numero: num, score: combined };
+        }).sort((a, b) => b.score - a.score);
+        const dailyFijos = scoresF.slice(0, 5).map(f => f.numero);
+
+        // Procesar cada sorteo de este día
+        sortedDraws.forEach(s => {
+          const resultNum = obtenerCodigoResultado(s.resultado);
+          if (!resultNum) return;
+
+          const isHotHit = dailyCalientes.includes(resultNum);
+          const isColdHit = dailyAtrasados.includes(resultNum);
+          const isFijosHit = dailyFijos.includes(resultNum);
+
+          history.push({
+            fecha: s.fecha,
+            hora: s.hora,
+            resultado: s.resultado,
+            calientes: dailyCalientes,
+            hitCaliente: isHotHit,
+            fijos: dailyFijos,
+            hitFijo: isFijosHit,
+            atrasados: dailyAtrasados,
+            hitAtrasado: isColdHit
+          });
+
+          // Inicializar estadísticas por hora
+          if (!hourlyStats[s.hora]) {
+            hourlyStats[s.hora] = {
+              hora: s.hora,
+              total: 0,
+              hitsCalientes: 0,
+              hitsFijos: 0,
+              hitsAtrasados: 0
+            };
+          }
+
+          hourlyStats[s.hora].total++;
+          if (isHotHit) hourlyStats[s.hora].hitsCalientes++;
+          if (isFijosHit) hourlyStats[s.hora].hitsFijos++;
+          if (isColdHit) hourlyStats[s.hora].hitsAtrasados++;
+        });
+      }
+    });
+
+    const hourlyList = Object.values(hourlyStats).map(h => {
+      return {
+        hora: h.hora,
+        total: h.total,
+        hitsCalientes: h.hitsCalientes,
+        pctCalientes: Math.round((h.hitsCalientes / h.total) * 100),
+        hitsFijos: h.hitsFijos,
+        pctFijos: Math.round((h.hitsFijos / h.total) * 100),
+        hitsAtrasados: h.hitsAtrasados,
+        pctAtrasados: Math.round((h.hitsAtrasados / h.total) * 100)
+      };
+    }).sort((a, b) => parseTimeToMinutes(a.hora) - parseTimeToMinutes(b.hora));
+
+    res.json({
+      success: true,
+      hourlyStats: hourlyList,
+      history: history.slice(0, 50)
+    });
+
+  } catch (err) {
+    console.error("Error en endpoint de auditoría:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Exportar análisis de aciertos y horas a Excel
 app.get('/api/configuracion/riesgos/export-xls', async (req, res) => {
   const { loteria } = req.query;
