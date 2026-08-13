@@ -2757,6 +2757,7 @@ app.get('/api/configuracion/riesgos', async (req, res) => {
       atrasados: stats.atrasados || [],
       aciertoCalientesSemana: stats.aciertoCalientesSemana || 0,
       aciertoAtrasadosSemana: stats.aciertoAtrasadosSemana || 0,
+      pesosIA: stats.pesosIA || null,
       cuantico: cache.riesgos.cuantico || null
     });
   } catch (error) {
